@@ -8,3 +8,8 @@ jobs:
   soundness:
     name: Soundness
     uses: ./.github/workflows/soundness.yaml
+
+  unit_test:
+    name: Unit Test
+    uses: ./.github/workflows/unit-test.yaml
+    secrets: inherit
