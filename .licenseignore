@@ -1,0 +1,8 @@
+.gitignore
+.swift-format
+.editorconfig
+*.md
+*.txt
+*.yml
+*.yaml
+Package.swift
