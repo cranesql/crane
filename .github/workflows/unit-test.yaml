@@ -28,4 +28,29 @@ jobs:
       - name: Resolve Swift dependencies
         run: swift package resolve
       - name: Run Unit Tests
-        run: swift test --parallel
+        run: swift test --parallel --enable-code-coverage --xunit-output junit.xml
+      - name: Merge code coverage
+        run: |
+          llvm-cov export -format "lcov" \
+            .build/debug/cranePackageTests.xctest \
+            -ignore-filename-regex="\/Tests\/" \
+            -ignore-filename-regex="\/.build\/" \
+            -instr-profile=./.build/debug/codecov/default.profdata \
+          > info.lcov
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit.xml,./junit-swift-testing.xml 
+          disable_search: true
+          fail_ci_if_error: true
+          flags: swift-${{ matrix.toolchain }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload code coverage report to Codecov
+        uses: codecov/codecov-action@v5.5.1
+        with:
+          files: ./info.lcov
+          disable_search: true
+          fail_ci_if_error: true
+          flags: unit
+          token: ${{ secrets.CODECOV_TOKEN }}
