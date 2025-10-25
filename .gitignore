@@ -10,3 +10,5 @@ xcuserdata/
 /*.gcno
 **/xcshareddata/WorkspaceSettings.xcsettings
 .vscode/
+/junit-swift-testing.xml
+/junit.xml
