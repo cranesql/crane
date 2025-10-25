@@ -1,5 +1,8 @@
 # Crane
 
+[![Unit Test](https://github.com/cranesql/crane/actions/workflows/unit-test.yaml/badge.svg)](https://github.com/cranesql/crane/actions/workflows/unit-test.yaml)
+[![codecov](https://codecov.io/github/cranesql/crane/graph/badge.svg?token=A0XX6J11BL)](https://codecov.io/github/cranesql/crane)
+
 A cross-platform SQL migration tool, inspired by [Flyway](https://github.com/flyway/flyway).
 
 ## Database support
