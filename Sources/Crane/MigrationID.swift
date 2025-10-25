@@ -11,8 +11,27 @@
 //
 //===----------------------------------------------------------------------===//
 
-enum MigrationID: Hashable {
-    case apply(version: String, description: String)
-    case undo(version: String, description: String)
+enum MigrationID: Hashable, Comparable {
+    case apply(version: Int, description: String)
+    case undo(version: Int, description: String)
     case repeatable(description: String)
+
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case let (.apply(lhsVersion, _), .apply(rhsVersion, _)):
+            lhsVersion < rhsVersion
+        case let (.apply(lhsVersion, _), .undo(rhsVersion, _)):
+            lhsVersion <= rhsVersion
+        case let (.undo(lhsVersion, _), .apply(rhsVersion, _)):
+            lhsVersion < rhsVersion
+        case let (.undo(lhsVersion, _), .undo(rhsVersion, _)):
+            lhsVersion < rhsVersion
+        case (.apply, .repeatable), (.undo, .repeatable):
+            true
+        case (.repeatable, .apply), (.repeatable, .undo):
+            false
+        case let (.repeatable(lhsDescription), .repeatable(rhsDescription)):
+            lhsDescription < rhsDescription
+        }
+    }
 }

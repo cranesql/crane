@@ -23,7 +23,7 @@ struct `Migration ID file name parsing` {
 
             let id = try MigrationID(parsingFileName: fileName)
 
-            try #expect(id == .apply(version: "1", description: "create_users"))
+            try #expect(id == .apply(version: 1, description: "create_users"))
         }
 
         @Test func `With empty version prefix`() throws {
@@ -31,7 +31,7 @@ struct `Migration ID file name parsing` {
 
             let id = try MigrationID(parsingFileName: fileName, versionPrefix: "")
 
-            try #expect(id == .apply(version: "1", description: "create_users"))
+            try #expect(id == .apply(version: 1, description: "create_users"))
         }
 
         @Test func `Without version prefix`() throws {
@@ -39,7 +39,7 @@ struct `Migration ID file name parsing` {
 
             let id = try MigrationID(parsingFileName: fileName, versionPrefix: nil)
 
-            try #expect(id == .apply(version: "1", description: "create_users"))
+            try #expect(id == .apply(version: 1, description: "create_users"))
         }
 
         @Test func `With custom identifier`() throws {
@@ -47,7 +47,7 @@ struct `Migration ID file name parsing` {
 
             let id = try MigrationID(parsingFileName: fileName, applyIdentifier: "up")
 
-            try #expect(id == .apply(version: "1", description: "create_users"))
+            try #expect(id == .apply(version: 1, description: "create_users"))
         }
 
         @Test func `Throws error with mismatching version prefix`() throws {
@@ -62,6 +62,16 @@ struct `Migration ID file name parsing` {
                 try MigrationID(parsingFileName: fileName)
             }
         }
+
+        @Test func `Throws error with non-integer version`() throws {
+            let fileName = "vone.create_users.apply.sql"
+
+            let error = FileSystemMigrationIDParsingError.nonIntegerVersion("one")
+
+            #expect(throws: error) {
+                try MigrationID(parsingFileName: fileName)
+            }
+        }
     }
 
     @Suite struct `Undo` {
@@ -70,7 +80,7 @@ struct `Migration ID file name parsing` {
 
             let id = try MigrationID(parsingFileName: fileName)
 
-            try #expect(id == .undo(version: "1", description: "create_users"))
+            try #expect(id == .undo(version: 1, description: "create_users"))
         }
 
         @Test func `With empty version prefix`() throws {
@@ -78,7 +88,7 @@ struct `Migration ID file name parsing` {
 
             let id = try MigrationID(parsingFileName: fileName, versionPrefix: "")
 
-            try #expect(id == .undo(version: "1", description: "create_users"))
+            try #expect(id == .undo(version: 1, description: "create_users"))
         }
 
         @Test func `Without version prefix`() throws {
@@ -86,7 +96,7 @@ struct `Migration ID file name parsing` {
 
             let id = try MigrationID(parsingFileName: fileName, versionPrefix: nil)
 
-            try #expect(id == .undo(version: "1", description: "create_users"))
+            try #expect(id == .undo(version: 1, description: "create_users"))
         }
 
         @Test func `With custom identifier`() throws {
@@ -94,7 +104,7 @@ struct `Migration ID file name parsing` {
 
             let id = try MigrationID(parsingFileName: fileName, undoIdentifier: "down")
 
-            try #expect(id == .undo(version: "1", description: "create_users"))
+            try #expect(id == .undo(version: 1, description: "create_users"))
         }
 
         @Test func `Throws error with mismatching version prefix`() throws {
@@ -104,6 +114,16 @@ struct `Migration ID file name parsing` {
                 malformedFileName: fileName,
                 expectedPrefix: "v"
             )
+
+            #expect(throws: error) {
+                try MigrationID(parsingFileName: fileName)
+            }
+        }
+
+        @Test func `Throws error with non-integer version`() throws {
+            let fileName = "vone.create_users.undo.sql"
+
+            let error = FileSystemMigrationIDParsingError.nonIntegerVersion("one")
 
             #expect(throws: error) {
                 try MigrationID(parsingFileName: fileName)
@@ -163,8 +183,8 @@ struct `Migration ID file name parsing` {
 
     @Suite struct `Description` {
         @Test(arguments: [
-            ("v1.create_users.apply.sql", MigrationID.apply(version: "1", description: "create_users")),
-            ("v1.create_users.undo.sql", MigrationID.undo(version: "1", description: "create_users")),
+            ("v1.create_users.apply.sql", MigrationID.apply(version: 1, description: "create_users")),
+            ("v1.create_users.undo.sql", MigrationID.undo(version: 1, description: "create_users")),
             ("repeat.refresh_views.sql", MigrationID.repeatable(description: "refresh_views")),
         ])
         func `With defaults`(fileName: String, expectedID: MigrationID) throws {
@@ -172,8 +192,8 @@ struct `Migration ID file name parsing` {
         }
 
         @Test(arguments: [
-            ("v1-create_users.apply.sql", MigrationID.apply(version: "1", description: "create_users")),
-            ("v1-create_users.undo.sql", MigrationID.undo(version: "1", description: "create_users")),
+            ("v1-create_users.apply.sql", MigrationID.apply(version: 1, description: "create_users")),
+            ("v1-create_users.undo.sql", MigrationID.undo(version: 1, description: "create_users")),
             ("repeat-refresh_views.sql", MigrationID.repeatable(description: "refresh_views")),
         ])
         func `With custom prefix`(fileName: String, expectedID: MigrationID) throws {
@@ -183,8 +203,8 @@ struct `Migration ID file name parsing` {
         }
 
         @Test(arguments: [
-            ("v1.create_users-apply.sql", MigrationID.apply(version: "1", description: "create_users")),
-            ("v1.create_users-undo.sql", MigrationID.undo(version: "1", description: "create_users")),
+            ("v1.create_users-apply.sql", MigrationID.apply(version: 1, description: "create_users")),
+            ("v1.create_users-undo.sql", MigrationID.undo(version: 1, description: "create_users")),
             ("repeat.refresh_views.sql", MigrationID.repeatable(description: "refresh_views")),
         ])
         func `With custom suffix`(fileName: String, expectedID: MigrationID) throws {
