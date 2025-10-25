@@ -126,7 +126,10 @@ extension MigrationID {
                 let description = String(decoding: description, as: UTF8.self)
 
                 if let (direction, version) = directionalVersion {
-                    let version = String(decoding: version, as: UTF8.self)
+                    let versionString = String(decoding: version, as: UTF8.self)
+                    guard let version = Int(versionString) else {
+                        throw FileSystemMigrationIDParsingError.nonIntegerVersion(versionString)
+                    }
                     switch direction {
                     case .apply:
                         self = .apply(version: version, description: description)
@@ -158,6 +161,7 @@ extension MigrationID {
 
 enum FileSystemMigrationIDParsingError: Error, Equatable {
     case invalidVersionPrefix(malformedFileName: String, expectedPrefix: String?)
+    case nonIntegerVersion(_ malformedVersion: String)
     case invalidDescriptionPrefix(malformedFileName: String, expectedPrefix: String)
     case invalidDescriptionSuffix(malformedFileName: String, expectedSuffix: String)
     case invalidDirectionIdentifier(malformedFileName: String, expectedDirectionIdentifiers: [String])
