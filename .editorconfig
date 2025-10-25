@@ -7,5 +7,5 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.{sh,swift-format,yaml}]
+[*.{sh,swift-format,yaml,json}]
 indent_size = 2
