@@ -26,17 +26,17 @@ struct `File-System Migration Resolver` {
     @Test func `Resolves migration files from single path`() async throws {
         try await withTemporaryDirectories("migrations") { rootURL, urls in
             try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
-                to: urls[0].appending(path: "v1.create_users.apply.sql"),
+                to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
                 atomically: true,
                 encoding: .utf8
             )
             try "DROP TABLE users;".write(
-                to: urls[0].appending(path: "v1.create_users.undo.sql"),
+                to: urls[0].appendingPathComponent("v1.create_users.undo.sql"),
                 atomically: true,
                 encoding: .utf8
             )
             try "SELECT VERSION();".write(
-                to: urls[0].appending(path: "repeat.version.sql"),
+                to: urls[0].appendingPathComponent("repeat.version.sql"),
                 atomically: true,
                 encoding: .utf8
             )
@@ -61,20 +61,20 @@ struct `File-System Migration Resolver` {
 
     @Test func `Ignores migration files from nested paths if not configured`() async throws {
         try await withTemporaryDirectories("migrations") { rootURL, urls in
-            let nestedFolderURL = rootURL.appending(path: "migrations/repeatable")
+            let nestedFolderURL = rootURL.appendingPathComponent("migrations/repeatable")
             try FileManager.default.createDirectory(at: nestedFolderURL, withIntermediateDirectories: false)
             try "SELECT VERSION();".write(
-                to: nestedFolderURL.appending(path: "repeat.version.sql"),
+                to: nestedFolderURL.appendingPathComponent("repeat.version.sql"),
                 atomically: true,
                 encoding: .utf8
             )
             try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
-                to: urls[0].appending(path: "v1.create_users.apply.sql"),
+                to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
                 atomically: true,
                 encoding: .utf8
             )
             try "DROP TABLE users;".write(
-                to: urls[0].appending(path: "v1.create_users.undo.sql"),
+                to: urls[0].appendingPathComponent("v1.create_users.undo.sql"),
                 atomically: true,
                 encoding: .utf8
             )
@@ -95,17 +95,17 @@ struct `File-System Migration Resolver` {
     @Test func `Resolves migration files from nested paths if configured`() async throws {
         try await withTemporaryDirectories("migrations", "migrations/repeatable") { rootURL, urls in
             try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
-                to: urls[0].appending(path: "v1.create_users.apply.sql"),
+                to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
                 atomically: true,
                 encoding: .utf8
             )
             try "DROP TABLE users;".write(
-                to: urls[0].appending(path: "v1.create_users.undo.sql"),
+                to: urls[0].appendingPathComponent("v1.create_users.undo.sql"),
                 atomically: true,
                 encoding: .utf8
             )
             try "SELECT VERSION();".write(
-                to: urls[1].appending(path: "repeat.version.sql"),
+                to: urls[1].appendingPathComponent("repeat.version.sql"),
                 atomically: true,
                 encoding: .utf8
             )
@@ -139,8 +139,8 @@ private func withTemporaryDirectories<T>(
     operation: (_ rootURL: URL, _ urls: [URL]) async throws -> T
 ) async throws -> T {
     let id = UUID().uuidString
-    let rootURL = URL.temporaryDirectory.appending(path: id)
-    let urls = paths.map { rootURL.appending(path: $0) }
+    let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(id)
+    let urls = paths.map { rootURL.appendingPathComponent($0) }
 
     do {
         for url in urls {
