@@ -21,18 +21,18 @@ struct FileSystemMigrationResolver: MigrationResolver {
     private let rootURL: URL
     private let urls: [URL]
 
-    init(paths: [String], rootPath: @autoclosure () -> String = "\(URL.currentDirectory())") throws {
-        let rootURL = URL(filePath: rootPath())
+    init(paths: [String], rootPath: @autoclosure () -> String = FileManager.default.currentDirectoryPath) throws {
+        let rootURL = URL(fileURLWithPath: rootPath())
         self.rootURL = rootURL
         guard !paths.isEmpty else {
             throw FileSystemMigrationResolverError.noPaths
         }
-        self.urls = paths.map { rootURL.appending(path: $0) }
+        self.urls = paths.map { rootURL.appendingPathComponent($0) }
     }
 
     func migrations() async throws -> [ResolvedMigration] {
         let fileURLs = try urls.flatMap { url in
-            try FileManager.default.contentsOfDirectory(atPath: url.path).map { url.appending(path: $0) }
+            try FileManager.default.contentsOfDirectory(atPath: url.path).map { url.appendingPathComponent($0) }
         }
 
         let migrations = try fileURLs.lazy
@@ -55,3 +55,14 @@ struct FileSystemMigrationResolver: MigrationResolver {
 enum FileSystemMigrationResolverError: Error {
     case noPaths
 }
+
+#if canImport(ObjectiveC)
+extension FileManager {
+    fileprivate func fileExists(atPath path: String, isDirectory: inout Bool) -> Bool {
+        var legacyIsDirectory: ObjCBool = false
+        let fileExists = fileExists(atPath: path, isDirectory: &legacyIsDirectory)
+        isDirectory = legacyIsDirectory.boolValue
+        return fileExists
+    }
+}
+#endif
