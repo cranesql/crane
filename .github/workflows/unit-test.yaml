@@ -7,27 +7,24 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-unit-test
   cancel-in-progress: true
 jobs:
-  unit-test:
-    name: Unit Test
-    runs-on: ${{ matrix.platform }}
-    timeout-minutes: 10
+  linux-build:
+    name: Linux (${{ matrix.swift_version }} - ${{ matrix.os_version }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-latest]
-        toolchain: [latest]
+        swift_version: ["6.2", "nightly-main"]
+        os_version: ["jammy"]
+    container:
+      image: ${{ (contains(matrix.swift_version, 'nightly') && 'swiftlang/swift') || 'swift' }}:${{ matrix.swift_version }}-${{ matrix.os_version }}
     steps:
-      - name: Install Swift
-        uses: vapor/swiftly-action@v0.2
-        with:
-          toolchain: ${{ matrix.toolchain }}
-        env:
-          SWIFTLY_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Checkout
+      - name: Swift version
+        run: swift --version
+      - name: Clang version
+        run: clang --version
+      - name: Checkout repository
         uses: actions/checkout@v5
-      - name: Resolve Swift dependencies
-        run: swift package resolve
-      - name: Run Unit Tests
+      - name: Build / Test
         run: swift test --parallel --enable-code-coverage --xunit-output junit.xml
       - name: Merge code coverage
         run: |
@@ -37,14 +34,20 @@ jobs:
             -ignore-filename-regex="\/.build\/" \
             -instr-profile=./.build/debug/codecov/default.profdata \
           > info.lcov
+      - name: Install curl
+        run: |
+          if ! command -v curl > /dev/null; then
+            apt-get update
+            apt-get install -y curl
+          fi
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          files: ./junit.xml,./junit-swift-testing.xml 
+          files: ./junit.xml,./junit-swift-testing.xml
           disable_search: true
           fail_ci_if_error: true
-          flags: swift-${{ matrix.toolchain }}
+          flags: linux-${{ matrix.os_version }},swift-${{ matrix.swift_version }}
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload code coverage report to Codecov
         uses: codecov/codecov-action@v5.5.1
