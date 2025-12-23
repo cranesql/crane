@@ -11,6 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-protocol MigrationResolver {
+package protocol MigrationResolver {
     func migrations() async throws -> [ResolvedMigration]
 }

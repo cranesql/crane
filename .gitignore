@@ -12,3 +12,4 @@ xcuserdata/
 .vscode/
 /junit-swift-testing.xml
 /junit.xml
+.benchmarkBaselines/

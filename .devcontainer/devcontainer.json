@@ -10,6 +10,9 @@
     "--security-opt",
     "seccomp=unconfined"
   ],
+  "containerEnv": {
+    "CRANE_ENABLE_BENCHMARKS": "TRUE"
+  },
   "customizations": {
     "vscode": {
       "settings": {

@@ -11,12 +11,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-enum MigrationID: Hashable, Comparable {
+package enum MigrationID: Hashable, Comparable {
     case apply(version: Int, description: String)
     case undo(version: Int, description: String)
     case repeatable(description: String)
 
-    static func < (lhs: Self, rhs: Self) -> Bool {
+    package static func < (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case let (.apply(lhsVersion, _), .apply(rhsVersion, _)):
             lhsVersion < rhsVersion
