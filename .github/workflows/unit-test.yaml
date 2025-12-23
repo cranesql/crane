@@ -50,7 +50,7 @@ jobs:
           flags: linux-${{ matrix.os_version }},swift-${{ matrix.swift_version }}
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload code coverage report to Codecov
-        uses: codecov/codecov-action@v5.5.1
+        uses: codecov/codecov-action@v5.5.2
         with:
           files: ./info.lcov
           disable_search: true
