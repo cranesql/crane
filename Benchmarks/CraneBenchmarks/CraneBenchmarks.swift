@@ -11,6 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-package protocol MigrationResolver {
-    func migrations() async throws -> [ResolvedMigration]
+import Benchmark
+
+let benchmarks: @Sendable () -> Void = {
+    fileSystemMigrationResolverBenchmarks()
 }

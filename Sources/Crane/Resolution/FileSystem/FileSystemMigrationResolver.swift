@@ -17,11 +17,14 @@ import FoundationEssentials
 import Foundation
 #endif
 
-struct FileSystemMigrationResolver: MigrationResolver {
+package struct FileSystemMigrationResolver: MigrationResolver {
     private let rootURL: URL
     private let urls: [URL]
 
-    init(paths: [String], rootPath: @autoclosure () -> String = FileManager.default.currentDirectoryPath) throws {
+    package init(
+        paths: [String],
+        rootPath: @autoclosure () -> String = FileManager.default.currentDirectoryPath
+    ) throws {
         let rootURL = URL(fileURLWithPath: rootPath())
         self.rootURL = rootURL
         guard !paths.isEmpty else {
@@ -30,7 +33,7 @@ struct FileSystemMigrationResolver: MigrationResolver {
         self.urls = paths.map { rootURL.appendingPathComponent($0) }
     }
 
-    func migrations() async throws -> [ResolvedMigration] {
+    package func migrations() async throws -> [ResolvedMigration] {
         let fileURLs = try urls.flatMap { url in
             try FileManager.default.contentsOfDirectory(atPath: url.path).map { url.appendingPathComponent($0) }
         }

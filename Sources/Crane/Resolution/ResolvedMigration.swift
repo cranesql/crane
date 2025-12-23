@@ -11,17 +11,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-struct ResolvedMigration: Identifiable {
-    let id: MigrationID
+package struct ResolvedMigration: Identifiable {
+    package let id: MigrationID
     private let _sqlScript: @Sendable () async throws -> String
 
-    var sqlScript: String {
+    package var sqlScript: String {
         get async throws {
             try await _sqlScript()
         }
     }
 
-    init(id: MigrationID, sqlScript: @escaping @Sendable () async throws -> String) {
+    package init(id: MigrationID, sqlScript: @escaping @Sendable () async throws -> String) {
         self.id = id
         self._sqlScript = sqlScript
     }
