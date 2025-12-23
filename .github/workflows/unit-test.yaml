@@ -23,7 +23,7 @@ jobs:
       - name: Clang version
         run: clang --version
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Build / Test
         run: swift test --parallel --enable-code-coverage --xunit-output junit.xml
       - name: Merge code coverage
