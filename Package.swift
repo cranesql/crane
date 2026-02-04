@@ -1,21 +1,41 @@
 // swift-tools-version:6.2
 import PackageDescription
 
+let sharedSwiftSettings: [SwiftSetting] = [
+    .enableUpcomingFeature("InternalImportsByDefault"),
+    .enableUpcomingFeature("ExistentialAny"),
+]
+
 let package = Package(
     name: "crane",
+    platforms: [
+        .iOS(.v13),
+        .macOS(.v10_15),
+        .watchOS(.v6),
+        .tvOS(.v13),
+    ],
     products: [
         .library(name: "Crane", targets: ["Crane"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"5.0.0")
+    ],
     targets: [
-        .target(name: "Crane"),
+        .target(
+            name: "Crane",
+            dependencies: [
+                .product(name: "Crypto", package: "swift-crypto")
+            ],
+            swiftSettings: sharedSwiftSettings
+        ),
         .testTarget(
             name: "CraneTests",
             dependencies: [
                 .target(name: "Crane")
-            ]
+            ],
+            swiftSettings: sharedSwiftSettings
         ),
-    ],
-    swiftLanguageModes: [.v6]
+    ]
 )
 
 if Context.environment["CRANE_ENABLE_BENCHMARKS"] != nil {
