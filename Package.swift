@@ -1,18 +1,27 @@
 // swift-tools-version:6.2
 import PackageDescription
 
+let sharedSwiftSettings: [SwiftSetting] = [
+    .enableUpcomingFeature("InternalImportsByDefault"),
+    .enableUpcomingFeature("ExistentialAny"),
+]
+
 let package = Package(
     name: "crane",
     products: [
         .library(name: "Crane", targets: ["Crane"])
     ],
     targets: [
-        .target(name: "Crane"),
+        .target(
+            name: "Crane",
+            swiftSettings: sharedSwiftSettings
+        ),
         .testTarget(
             name: "CraneTests",
             dependencies: [
                 .target(name: "Crane")
-            ]
+            ],
+            swiftSettings: sharedSwiftSettings
         ),
     ]
 )
