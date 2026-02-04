@@ -14,8 +14,7 @@ let package = Package(
                 .target(name: "Crane")
             ]
         ),
-    ],
-    swiftLanguageModes: [.v6]
+    ]
 )
 
 if Context.environment["CRANE_ENABLE_BENCHMARKS"] != nil {
