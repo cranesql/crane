@@ -12,7 +12,7 @@
   "indentSwitchCaseLabels" : false,
   "lineBreakAroundMultilineExpressionChainComponents" : false,
   "lineBreakBeforeControlFlowKeywords" : false,
-  "lineBreakBeforeEachArgument" : true,
+  "lineBreakBeforeEachArgument" : false,
   "lineBreakBeforeEachGenericRequirement" : true,
   "lineLength" : 120,
   "maximumBlankLines" : 1,

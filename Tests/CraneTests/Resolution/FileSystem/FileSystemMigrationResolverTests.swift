@@ -156,7 +156,7 @@ struct `File-System Migration Resolver` {
     }
 
     @Test func `Fails to initialize without paths`() async throws {
-        #expect(throws: Error.self) {
+        #expect(throws: (any Error).self) {
             try FileSystemMigrationResolver(paths: [])
         }
     }

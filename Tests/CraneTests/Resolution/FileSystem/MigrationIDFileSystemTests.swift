@@ -158,7 +158,7 @@ struct `Migration ID file name parsing` {
     }
 
     @Test func `Throws error on empty file name`() {
-        #expect(throws: Error.self) {
+        #expect(throws: (any Error).self) {
             try MigrationID(parsingFileName: "")
         }
     }
