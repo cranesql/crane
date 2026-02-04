@@ -113,7 +113,7 @@ jobs:
           set -e
 
       - name: Comment PR (if from non-fork)
-        if: ${{ env.hasBenchmark == '1' && github.event.pull_request.head.repo.fork == false }}
+        if: env.hasBenchmark == '1' && github.event.pull_request.head.repo.fork == false
         uses: thollander/actions-comment-pull-request@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -121,4 +121,4 @@ jobs:
           comment-tag: benchmark
       - name: Exit with correct status
         run: |
-          exit ${{env.exitStatus}}
+          exit ${{ env.exitStatus }}

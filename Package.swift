@@ -3,11 +3,28 @@ import PackageDescription
 
 let package = Package(
     name: "crane",
+    platforms: [
+        .macOS(.v15)
+    ],
     products: [
         .library(name: "Crane", targets: ["Crane"])
     ],
+    traits: [
+        .default(enabledTraits: ["Logging"]),
+        .trait(name: "Logging"),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.2.0"),
+    ],
     targets: [
-        .target(name: "Crane"),
+        .target(
+            name: "Crane",
+            dependencies: [
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "Logging", package: "swift-log", condition: .when(traits: ["Logging"])),
+            ]
+        ),
         .testTarget(
             name: "CraneTests",
             dependencies: [

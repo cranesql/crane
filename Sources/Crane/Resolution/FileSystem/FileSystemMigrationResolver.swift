@@ -44,8 +44,14 @@ package struct FileSystemMigrationResolver: MigrationResolver {
                 guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory else {
                     return nil
                 }
+
+                // Compute relative path by stripping rootURL from url
+                let relativeFilePath: String
+                let rootPathWithSeparator = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
+                relativeFilePath = String(url.path.dropFirst(rootPathWithSeparator.count))
+
                 let id = try MigrationID(parsingFileName: url.lastPathComponent)
-                return ResolvedMigration(id: id) {
+                return ResolvedMigration(id: id, relativeFilePath: relativeFilePath) {
                     try String(contentsOf: url, encoding: .utf8)
                 }
             }

@@ -11,6 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-package protocol MigrationResolver {
+package protocol MigrationResolver: Sendable {
     func migrations() async throws -> [ResolvedMigration]
 }

@@ -43,19 +43,27 @@ struct `File-System Migration Resolver` {
 
             let resolver = try FileSystemMigrationResolver(paths: ["migrations"], rootPath: rootURL.path)
 
-            let migrations = try await resolver.migrations()
+            let migrations = try await resolver.equatableMigrations()
 
-            try #require(
-                migrations.map(\.id) == [
-                    .apply(version: 1, description: "create_users"),
-                    .undo(version: 1, description: "create_users"),
-                    .repeatable(description: "version"),
+            #expect(
+                migrations == [
+                    EquatableResolvedMigration(
+                        id: .apply(version: 1, description: "create_users"),
+                        relativeFilePath: "migrations/v1.create_users.apply.sql",
+                        sqlScript: "CREATE TABLE users (id UUID PRIMARY KEY);"
+                    ),
+                    EquatableResolvedMigration(
+                        id: .undo(version: 1, description: "create_users"),
+                        relativeFilePath: "migrations/v1.create_users.undo.sql",
+                        sqlScript: "DROP TABLE users;"
+                    ),
+                    EquatableResolvedMigration(
+                        id: .repeatable(description: "version"),
+                        relativeFilePath: "migrations/repeat.version.sql",
+                        sqlScript: "SELECT VERSION();"
+                    ),
                 ]
             )
-
-            #expect(try await migrations[0].sqlScript == "CREATE TABLE users (id UUID PRIMARY KEY);")
-            #expect(try await migrations[1].sqlScript == "DROP TABLE users;")
-            #expect(try await migrations[2].sqlScript == "SELECT VERSION();")
         }
     }
 
@@ -81,12 +89,20 @@ struct `File-System Migration Resolver` {
 
             let resolver = try FileSystemMigrationResolver(paths: ["migrations"], rootPath: rootURL.path)
 
-            let migrations = try await resolver.migrations()
+            let migrations = try await resolver.equatableMigrations()
 
             #expect(
-                migrations.map(\.id) == [
-                    .apply(version: 1, description: "create_users"),
-                    .undo(version: 1, description: "create_users"),
+                migrations == [
+                    EquatableResolvedMigration(
+                        id: .apply(version: 1, description: "create_users"),
+                        relativeFilePath: "migrations/v1.create_users.apply.sql",
+                        sqlScript: "CREATE TABLE users (id UUID PRIMARY KEY);"
+                    ),
+                    EquatableResolvedMigration(
+                        id: .undo(version: 1, description: "create_users"),
+                        relativeFilePath: "migrations/v1.create_users.undo.sql",
+                        sqlScript: "DROP TABLE users;"
+                    ),
                 ]
             )
         }
@@ -115,13 +131,25 @@ struct `File-System Migration Resolver` {
                 rootPath: rootURL.path
             )
 
-            let migrations = try await resolver.migrations()
+            let migrations = try await resolver.equatableMigrations()
 
             #expect(
-                migrations.map(\.id) == [
-                    .apply(version: 1, description: "create_users"),
-                    .undo(version: 1, description: "create_users"),
-                    .repeatable(description: "version"),
+                migrations == [
+                    EquatableResolvedMigration(
+                        id: .apply(version: 1, description: "create_users"),
+                        relativeFilePath: "migrations/v1.create_users.apply.sql",
+                        sqlScript: "CREATE TABLE users (id UUID PRIMARY KEY);"
+                    ),
+                    EquatableResolvedMigration(
+                        id: .undo(version: 1, description: "create_users"),
+                        relativeFilePath: "migrations/v1.create_users.undo.sql",
+                        sqlScript: "DROP TABLE users;"
+                    ),
+                    EquatableResolvedMigration(
+                        id: .repeatable(description: "version"),
+                        relativeFilePath: "migrations/repeatable/repeat.version.sql",
+                        sqlScript: "SELECT VERSION();"
+                    ),
                 ]
             )
         }
@@ -134,23 +162,30 @@ struct `File-System Migration Resolver` {
     }
 }
 
-private func withTemporaryDirectories<T>(
-    _ paths: String...,
-    operation: (_ rootURL: URL, _ urls: [URL]) async throws -> T
-) async throws -> T {
-    let id = UUID().uuidString
-    let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(id)
-    let urls = paths.map { rootURL.appendingPathComponent($0) }
-
-    do {
-        for url in urls {
-            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+private extension FileSystemMigrationResolver {
+    func equatableMigrations() async throws -> [EquatableResolvedMigration] {
+        var migrations = [EquatableResolvedMigration]()
+        for migration in try await self.migrations() {
+            migrations.append(try await EquatableResolvedMigration(migration))
         }
-        let result = try await operation(rootURL, urls)
-        try FileManager.default.removeItem(at: rootURL)
-        return result
-    } catch {
-        try? FileManager.default.removeItem(at: rootURL)
-        throw error
+        return migrations
+    }
+}
+
+private struct EquatableResolvedMigration: Identifiable, Equatable {
+    let id: MigrationID
+    let relativeFilePath: String?
+    let sqlScript: String
+
+    init(id: MigrationID, relativeFilePath: String?, sqlScript: String) {
+        self.id = id
+        self.relativeFilePath = relativeFilePath
+        self.sqlScript = sqlScript
+    }
+
+    init(_ resolvedMigration: ResolvedMigration) async throws {
+        self.id = resolvedMigration.id
+        self.relativeFilePath = resolvedMigration.relativeFilePath
+        self.sqlScript = try await resolvedMigration.sqlScript
     }
 }
