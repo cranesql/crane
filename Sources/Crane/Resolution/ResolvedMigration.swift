@@ -13,6 +13,7 @@
 
 package struct ResolvedMigration: Identifiable {
     package let id: MigrationID
+    package let relativeFilePath: String?
     private let _sqlScript: @Sendable () async throws -> String
 
     package var sqlScript: String {
@@ -21,8 +22,9 @@ package struct ResolvedMigration: Identifiable {
         }
     }
 
-    package init(id: MigrationID, sqlScript: @escaping @Sendable () async throws -> String) {
+    package init(id: MigrationID, relativeFilePath: String?, sqlScript: @escaping @Sendable () async throws -> String) {
         self.id = id
+        self.relativeFilePath = relativeFilePath
         self._sqlScript = sqlScript
     }
 }

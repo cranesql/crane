@@ -24,6 +24,7 @@ struct `Resolved Migration` {
 
             let migration = ResolvedMigration(
                 id: .apply(version: 1, description: "create_users"),
+                relativeFilePath: "migrations/v1.create_users.apply.sql",
                 sqlScript: { sqlScript }
             )
 
@@ -35,6 +36,7 @@ struct `Resolved Migration` {
 
             let migration = ResolvedMigration(
                 id: .apply(version: 1, description: "create_users"),
+                relativeFilePath: "migrations/v1.create_users.apply.sql",
                 sqlScript: { throw TestError() }
             )
 

@@ -25,7 +25,8 @@ package struct FileSystemMigrationResolver: MigrationResolver {
         paths: [String],
         rootPath: @autoclosure () -> String = FileManager.default.currentDirectoryPath
     ) throws {
-        let rootURL = URL(fileURLWithPath: rootPath())
+        let rootPath = rootPath()
+        let rootURL = URL(fileURLWithPath: rootPath)
         self.rootURL = rootURL
         guard !paths.isEmpty else {
             throw FileSystemMigrationResolverError.noPaths
@@ -38,14 +39,18 @@ package struct FileSystemMigrationResolver: MigrationResolver {
             try FileManager.default.contentsOfDirectory(atPath: url.path).map { url.appendingPathComponent($0) }
         }
 
+        let rootPathPrefixLength = (rootURL.path + "/").count
+
         let migrations = try fileURLs.lazy
             .compactMap { url -> ResolvedMigration? in
                 var isDirectory = false
-                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory else {
+                let path = url.path
+                guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), !isDirectory else {
                     return nil
                 }
                 let id = try MigrationID(parsingFileName: url.lastPathComponent)
-                return ResolvedMigration(id: id) {
+                let relativeFilePath = String(path.dropFirst(rootPathPrefixLength))
+                return ResolvedMigration(id: id, relativeFilePath: relativeFilePath) {
                     try String(contentsOf: url, encoding: .utf8)
                 }
             }
