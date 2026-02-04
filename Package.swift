@@ -9,10 +9,10 @@ let sharedSwiftSettings: [SwiftSetting] = [
 let package = Package(
     name: "crane",
     platforms: [
-        .iOS(.v13),
-        .macOS(.v10_15),
-        .watchOS(.v6),
-        .tvOS(.v13),
+        .iOS(.v16),
+        .macOS(.v13),
+        .watchOS(.v9),
+        .tvOS(.v16),
     ],
     products: [
         .library(name: "Crane", targets: ["Crane"])
@@ -39,7 +39,6 @@ let package = Package(
 )
 
 if Context.environment["CRANE_ENABLE_BENCHMARKS"] != nil {
-    package.platforms = [.macOS(.v13)]
     package.dependencies.append(
         .package(url: "https://github.com/ordo-one/package-benchmark.git", from: "1.0.0")
     )
