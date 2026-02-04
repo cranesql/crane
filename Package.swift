@@ -8,12 +8,24 @@ let sharedSwiftSettings: [SwiftSetting] = [
 
 let package = Package(
     name: "crane",
+    platforms: [
+        .iOS(.v13),
+        .macOS(.v10_15),
+        .watchOS(.v6),
+        .tvOS(.v13),
+    ],
     products: [
         .library(name: "Crane", targets: ["Crane"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "5.0.0")
     ],
     targets: [
         .target(
             name: "Crane",
+            dependencies: [
+                .product(name: "Crypto", package: "swift-crypto")
+            ],
             swiftSettings: sharedSwiftSettings
         ),
         .testTarget(
