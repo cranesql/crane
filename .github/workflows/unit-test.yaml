@@ -57,3 +57,48 @@ jobs:
           fail_ci_if_error: true
           flags: unit
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  macos-build:
+    name: macOS (${{ matrix.os_version }})
+    runs-on: macos-${{ matrix.os_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os_version: ["26"]
+    steps:
+      - name: Swift version
+        id: swift-version
+        run: |
+          swift --version
+          echo "version=$(swift --version | head -n 1 | sed 's/Swift version \([0-9.]*\).*/\1/')" >> $GITHUB_OUTPUT
+      - name: Clang version
+        run: clang --version
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Build / Test
+        run: swift test --parallel --enable-code-coverage --xunit-output junit.xml
+      - name: Merge code coverage
+        run: |
+          xcrun llvm-cov export -format "lcov" \
+            .build/debug/cranePackageTests.xctest/Contents/MacOS/cranePackageTests \
+            -ignore-filename-regex="\/Tests\/" \
+            -ignore-filename-regex="\/.build\/" \
+            -instr-profile=./.build/debug/codecov/default.profdata \
+          > info.lcov
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit.xml,./junit-swift-testing.xml
+          disable_search: true
+          fail_ci_if_error: true
+          flags: ${{ matrix.os_version }},swift-${{ steps.swift-version.outputs.version }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload code coverage report to Codecov
+        uses: codecov/codecov-action@v5.5.2
+        with:
+          files: ./info.lcov
+          disable_search: true
+          fail_ci_if_error: true
+          flags: unit
+          token: ${{ secrets.CODECOV_TOKEN }}
