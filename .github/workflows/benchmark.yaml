@@ -5,9 +5,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - '**.swift'
-      - '**.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-benchmark
@@ -82,7 +79,7 @@ jobs:
           case "${EXIT_CODE}" in
             0)
               echo "_✅ Pull request no significant performance differences ✅_" >> comment.md
-              echo "exitStatus=0" >> $GITHUB_ENV
+              echo "exitStatus=0" >> $GITHUB_OUTPUT
               ;;
             *)
               # Get error string from benchmark output
@@ -90,15 +87,15 @@ jobs:
               case "${BENCHMARK_ERROR}" in
                 "benchmarkThresholdRegression")
                   echo "_❌ Pull request has performance regressions ❌_" >> comment.md
-                  echo "exitStatus=1" >> $GITHUB_ENV
+                  echo "exitStatus=1" >> $GITHUB_OUTPUT
                   ;;
                 "benchmarkThresholdImprovement")
                   echo "_✅ Pull request has performance improvements ✅_" >> comment.md
-                  echo "exitStatus=0" >> $GITHUB_ENV
+                  echo "exitStatus=0" >> $GITHUB_OUTPUT
                   ;;
                 *)
                   echo "_❌ Benchmark comparison failed with error $BENCHMARK_ERROR ❌_" >> comment.md
-                  echo "exitStatus=1" >> $GITHUB_ENV
+                  echo "exitStatus=1" >> $GITHUB_OUTPUT
                   ;;
               esac
               ;;
@@ -113,7 +110,7 @@ jobs:
           set -e
 
       - name: Comment PR (if from non-fork)
-        if: ${{ env.hasBenchmark == '1' && github.event.pull_request.head.repo.fork == false }}
+        if: github.event.pull_request.head.repo.fork == false
         uses: thollander/actions-comment-pull-request@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -121,4 +118,4 @@ jobs:
           comment-tag: benchmark
       - name: Exit with correct status
         run: |
-          exit ${{env.exitStatus}}
+          exit ${{ steps.benchmark-comment.outputs.exitStatus }}
