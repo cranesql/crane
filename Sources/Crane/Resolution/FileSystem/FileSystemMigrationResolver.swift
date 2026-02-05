@@ -49,8 +49,8 @@ package struct FileSystemMigrationResolver: MigrationResolver {
                     return nil
                 }
                 let id = try MigrationID(parsingFileName: url.lastPathComponent)
-                let relativeFilePath = String(path.dropFirst(rootPathPrefixLength))
-                return ResolvedMigration(id: id, relativeFilePath: relativeFilePath) {
+                let description = String(path.dropFirst(rootPathPrefixLength))
+                return ResolvedMigration(id: id, description: description) {
                     try String(contentsOf: url, encoding: .utf8)
                 }
             }
