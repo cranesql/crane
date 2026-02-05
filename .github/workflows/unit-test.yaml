@@ -102,3 +102,19 @@ jobs:
           fail_ci_if_error: true
           flags: unit
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  android-build:
+    name: Android (API ${{ matrix.android_api_level }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        android_api_level: [28, 34]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Build and test on Android emulator
+        uses: skiptools/swift-android-action@v2.8.2
+        with:
+          android-api-level: ${{ matrix.android_api_level }}
+          free-disk-space: true
