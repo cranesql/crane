@@ -34,6 +34,7 @@ import Testing
         let expectedChecksum = "8b2fd1ca9ca0e73cfe018cf8ffcb661e88f75da1d2353214d50def02b8b343c2"
 
         // All of these should produce the same checksum
+        let withoutLineEnding = "CREATE TABLE users (id UUID PRIMARY KEY);"
         let unixLineEndings = "CREATE TABLE users (id UUID PRIMARY KEY);\n"
         let windowsLineEndings = "CREATE TABLE users (id UUID PRIMARY KEY);\r\n"
         let classicMacLineEndings = "CREATE TABLE users (id UUID PRIMARY KEY);\r"
@@ -41,6 +42,7 @@ import Testing
         let withBOM = "\u{FEFF}CREATE TABLE users (id UUID PRIMARY KEY);\n"
         let allCombined = "\u{FEFF}CREATE TABLE users (id UUID PRIMARY KEY);  \r\n"
 
+        #expect(checksum(sqlScript: withoutLineEnding) == expectedChecksum)
         #expect(checksum(sqlScript: unixLineEndings) == expectedChecksum)
         #expect(checksum(sqlScript: windowsLineEndings) == expectedChecksum)
         #expect(checksum(sqlScript: classicMacLineEndings) == expectedChecksum)
