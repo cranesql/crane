@@ -43,15 +43,21 @@ package func checksum(sqlScript: String) -> String {
             // Reached end of current line => trim trailing whitespace and move onto next line
             currentLine.trimSuffix(while: \.isWhitespace)
             sha.update(data: Data(currentLine.utf8))
+            currentLine = ""
 
             if !sqlScript.isEmpty {
                 // Add newline except after final line
                 sha.update(data: Data.newLine)
-                currentLine = ""
             }
         default:
             currentLine.append(next)
         }
+    }
+
+    // Process any remaining content in the last line (when there's no trailing newline)
+    if !currentLine.isEmpty {
+        currentLine.trimSuffix(while: \.isWhitespace)
+        sha.update(data: Data(currentLine.utf8))
     }
 
     return sha.finalize().map { String(format: "%02x", $0) }.joined()
