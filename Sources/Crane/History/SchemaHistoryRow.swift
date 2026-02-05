@@ -11,7 +11,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-public import struct Foundation.Date
+#if canImport(FoundationEssentials)
+public import FoundationEssentials
+#else
+public import Foundation
+#endif
 
 /// Represents a row in the schema history table.
 public struct SchemaHistoryRow: Hashable, Sendable {
@@ -21,11 +25,9 @@ public struct SchemaHistoryRow: Hashable, Sendable {
     /// Version number for versioned migrations, nil for repeatable migrations.
     public let version: Int?
 
-    /// Human-readable description of the migration.
+    /// Description of the migration. For file-system resolvers, this contains the relative file path.
+    /// Other resolvers may use this field to store resolver-specific identifying information.
     public let description: String
-
-    /// File path of migration script relative to the project root if migration was resolved from the file-system, otherwise nil.
-    public let relativeFilePath: String?
 
     /// Type of migration.
     public let type: MigrationType
@@ -50,8 +52,7 @@ public struct SchemaHistoryRow: Hashable, Sendable {
     /// - Parameters:
     ///   - rank: Order in which this migration was applied.
     ///   - version: Version number for versioned migrations, nil for repeatable migrations.
-    ///   - description: Human-readable description of the migration.
-    ///   - relativeFilePath: File path of migration script relative to the project root if migration was resolved from the file-system, otherwise nil.
+    ///   - description: Description of the migration. For file-system resolvers, this contains the relative file path.
     ///   - type: Type of migration operation.
     ///   - checksum: Checksum for detecting changes to the migration script.
     ///   - user: Database user who executed the migration.
@@ -62,7 +63,6 @@ public struct SchemaHistoryRow: Hashable, Sendable {
         rank: Int,
         version: Int?,
         description: String,
-        relativeFilePath: String?,
         type: MigrationType,
         checksum: String,
         user: String,
@@ -73,7 +73,6 @@ public struct SchemaHistoryRow: Hashable, Sendable {
         self.rank = rank
         self.version = version
         self.description = description
-        self.relativeFilePath = relativeFilePath
         self.type = type
         self.checksum = checksum
         self.user = user
@@ -85,7 +84,7 @@ public struct SchemaHistoryRow: Hashable, Sendable {
     package init(
         id: MigrationID,
         rank: Int,
-        relativeFilePath: String?,
+        description: String,
         checksum: String,
         user: String,
         executionDate: Date,
@@ -93,21 +92,18 @@ public struct SchemaHistoryRow: Hashable, Sendable {
         succeeded: Bool
     ) {
         switch id {
-        case let .apply(version, description):
+        case let .apply(version, _):
             self.version = version
-            self.description = description
             self.type = .apply
-        case let .undo(version, description):
+        case let .undo(version, _):
             self.version = version
-            self.description = description
             self.type = .undo
-        case let .repeatable(description):
+        case .repeatable:
             self.version = nil
-            self.description = description
             self.type = .repeatable
         }
         self.rank = rank
-        self.relativeFilePath = relativeFilePath
+        self.description = description
         self.checksum = checksum
         self.user = user
         self.executionDate = executionDate

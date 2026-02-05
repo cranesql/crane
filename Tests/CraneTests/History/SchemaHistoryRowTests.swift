@@ -24,8 +24,7 @@ import Testing
         let expectedRow = SchemaHistoryRow(
             rank: 1,
             version: 42,
-            description: "create_users",
-            relativeFilePath: "migrations/v42.create_users.apply.sql",
+            description: "migrations/v42.create_users.apply.sql",
             type: .apply,
             checksum: checksum,
             user: "slashmo",
@@ -37,7 +36,7 @@ import Testing
         let row = SchemaHistoryRow(
             id: id,
             rank: 1,
-            relativeFilePath: "migrations/v42.create_users.apply.sql",
+            description: "migrations/v42.create_users.apply.sql",
             checksum: checksum,
             user: "slashmo",
             executionDate: executionDate,
@@ -56,8 +55,7 @@ import Testing
         let expectedRow = SchemaHistoryRow(
             rank: 2,
             version: 42,
-            description: "create_users",
-            relativeFilePath: "migrations/v42.create_users.undo.sql",
+            description: "migrations/v42.create_users.undo.sql",
             type: .undo,
             checksum: checksum,
             user: "slashmo",
@@ -69,7 +67,7 @@ import Testing
         let row = SchemaHistoryRow(
             id: id,
             rank: 2,
-            relativeFilePath: "migrations/v42.create_users.undo.sql",
+            description: "migrations/v42.create_users.undo.sql",
             checksum: checksum,
             user: "slashmo",
             executionDate: executionDate,
@@ -90,8 +88,7 @@ import Testing
         let expectedRow = SchemaHistoryRow(
             rank: 3,
             version: nil,
-            description: "refresh_views",
-            relativeFilePath: "migrations/repeat.refresh_views.sql",
+            description: "migrations/repeat.refresh_views.sql",
             type: .repeatable,
             checksum: checksum,
             user: "slashmo",
@@ -103,7 +100,7 @@ import Testing
         let row = SchemaHistoryRow(
             id: id,
             rank: 3,
-            relativeFilePath: "migrations/repeat.refresh_views.sql",
+            description: "migrations/repeat.refresh_views.sql",
             checksum: checksum,
             user: "slashmo",
             executionDate: executionDate,
