@@ -11,9 +11,24 @@
 //
 //===----------------------------------------------------------------------===//
 
+#if canImport(FoundationEssentials)
+public import FoundationEssentials
+#else
+public import Foundation
+#endif
+
 public struct Migrator<Target: MigrationTarget> {
     private let resolver: any MigrationResolver
     private let target: Target
+
+    public init(
+        rootPath: String = FileManager.default.currentDirectoryPath,
+        paths: [String] = ["migrations"],
+        target: Target
+    ) throws {
+        let resolver = try FileSystemMigrationResolver(paths: paths, rootPath: rootPath)
+        self.init(resolver: resolver, target: target)
+    }
 
     package init(resolver: some MigrationResolver, target: Target) {
         self.resolver = resolver
@@ -23,7 +38,28 @@ public struct Migrator<Target: MigrationTarget> {
     public func apply() async throws {
         let resolvedMigrations = try await resolver.migrations()
         let history = try await target.history()
-        try await validateExecutedMigrations(resolved: resolvedMigrations, history: history)
+        let state = try await validatedMigrationState(resolved: resolvedMigrations, history: history)
+
+        for migration in resolvedMigrations {
+            switch migration.id {
+            case .apply(let version, _):
+                let key = VersionedHistoryKey(version: version, type: .apply)
+                if !state.appliedVersionedKeys.contains(key) {
+                    try await target.execute(migration.sqlScript)
+                }
+            case .undo:
+                continue
+            case .repeatable:
+                let script = try await migration.sqlScript
+                if let lastChecksum = state.lastRepeatableChecksums[migration.description] {
+                    if checksum(sqlScript: script) != lastChecksum {
+                        try await target.execute(script)
+                    }
+                } else {
+                    try await target.execute(script)
+                }
+            }
+        }
     }
 
     /// Errors that can occur during migration validation.
@@ -33,9 +69,18 @@ public struct Migrator<Target: MigrationTarget> {
 
         /// A previously executed migration is no longer resolved by the migration resolver.
         case missingMigration(version: Int, type: SchemaHistoryRow.MigrationType, description: String)
+
+        /// A schema history row contained a versioned migration type without a version.
+        case missingVersion(type: SchemaHistoryRow.MigrationType, description: String)
+
+        /// A schema history row for a repeatable migration had a version set.
+        case repeatableMigrationWithVersion(version: Int, description: String)
     }
 
-    private func validateExecutedMigrations(resolved: [ResolvedMigration], history: [SchemaHistoryRow]) async throws {
+    private func validatedMigrationState(
+        resolved: [ResolvedMigration],
+        history: [SchemaHistoryRow]
+    ) async throws -> ValidatedMigrationState {
         var resolvedByVersionAndType: [VersionedHistoryKey: ResolvedMigration] = [:]
         for migration in resolved {
             switch migration.id {
@@ -48,33 +93,63 @@ public struct Migrator<Target: MigrationTarget> {
             }
         }
 
-        for row in history where row.version != nil {
-            let version = row.version!
-            let key = VersionedHistoryKey(version: version, type: row.type)
-            guard let resolvedMigration = resolvedByVersionAndType[key] else {
-                throw ValidationError.missingMigration(
-                    version: version,
-                    type: row.type,
-                    description: row.description
-                )
-            }
+        var appliedVersionedKeys = Set<VersionedHistoryKey>()
+        var lastRepeatableChecksums = [String: String]()
 
-            let sqlScript = try await resolvedMigration.sqlScript
-            let currentChecksum = checksum(sqlScript: sqlScript)
+        for row in history {
+            switch row.type {
+            case .apply, .undo:
+                guard let version = row.version else {
+                    throw ValidationError.missingVersion(type: row.type, description: row.description)
+                }
 
-            if currentChecksum != row.checksum {
-                throw ValidationError.checksumMismatch(
-                    id: resolvedMigration.id,
-                    description: row.description,
-                    expected: row.checksum,
-                    actual: currentChecksum
-                )
+                let key = VersionedHistoryKey(version: version, type: row.type)
+                guard let resolvedMigration = resolvedByVersionAndType[key] else {
+                    throw ValidationError.missingMigration(
+                        version: version,
+                        type: row.type,
+                        description: row.description
+                    )
+                }
+
+                let sqlScript = try await resolvedMigration.sqlScript
+                let currentChecksum = checksum(sqlScript: sqlScript)
+
+                if currentChecksum != row.checksum {
+                    throw ValidationError.checksumMismatch(
+                        id: resolvedMigration.id,
+                        description: row.description,
+                        expected: row.checksum,
+                        actual: currentChecksum
+                    )
+                }
+
+                appliedVersionedKeys.insert(key)
+
+            case .repeatable:
+                if let version = row.version {
+                    throw ValidationError.repeatableMigrationWithVersion(
+                        version: version, description: row.description
+                    )
+                }
+
+                lastRepeatableChecksums[row.description] = row.checksum
             }
         }
+
+        return ValidatedMigrationState(
+            appliedVersionedKeys: appliedVersionedKeys,
+            lastRepeatableChecksums: lastRepeatableChecksums
+        )
     }
 }
 
 private struct VersionedHistoryKey: Hashable {
     let version: Int
     let type: SchemaHistoryRow.MigrationType
+}
+
+private struct ValidatedMigrationState {
+    let appliedVersionedKeys: Set<VersionedHistoryKey>
+    let lastRepeatableChecksums: [String: String]
 }
