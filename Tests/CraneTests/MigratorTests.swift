@@ -21,6 +21,28 @@ import Foundation
 #endif
 
 @Suite struct Migrator {
+    @Test func `Defaults to file system resolver`() async throws {
+        try await withTemporaryDirectories("migrations") { rootURL, urls in
+            let migrationsURL = try #require(urls.first)
+            let script = "CREATE TABLE users (id UUID PRIMARY KEY);"
+            try script.write(
+                to: migrationsURL.appendingPathComponent("v1.create_users.apply.sql"),
+                atomically: true,
+                encoding: .utf8
+            )
+            let target = MockTarget(historyResult: .success([]))
+            let migrator = try Crane.Migrator(
+                rootPath: rootURL.path,
+                paths: ["migrations"],
+                target: target
+            )
+
+            try await migrator.apply()
+
+            #expect(target.executedSQLScripts == [script])
+        }
+    }
+
     @Suite struct Apply {
         @Test func `Validates checksums of previously executed versioned migrations`() async throws {
             let applyScript = "CREATE TABLE users (id UUID PRIMARY KEY);"
