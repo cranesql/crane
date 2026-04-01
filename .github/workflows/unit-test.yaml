@@ -114,7 +114,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
       - name: Build and test on Android emulator
-        uses: skiptools/swift-android-action@v2.8.2
+        uses: skiptools/swift-android-action@v2.9.2
         with:
           android-api-level: ${{ matrix.android_api_level }}
           free-disk-space: true
