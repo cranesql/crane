@@ -15,7 +15,7 @@ env:
 
 jobs:
   benchmark:
-    name: Check benchmark regressions (Swift ${{ matrix.swift.version }})
+    name: Check benchmark regressions
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -24,15 +24,8 @@ jobs:
       pull-requests: write
       contents: read
 
-    strategy:
-      fail-fast: false
-      matrix:
-        swift:
-          - version: "6.2"
-            image: swift:6.2
-
     container:
-      image: ${{ matrix.swift.image }}
+      image: swift:6.3
 
     steps:
       - uses: actions/checkout@v6

@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        swift_version: ["6.2", "nightly-main"]
+        swift_version: ["6.2", "6.3", "nightly-main"]
         os_version: ["jammy"]
     container:
       image: ${{ (contains(matrix.swift_version, 'nightly') && 'swiftlang/swift') || 'swift' }}:${{ matrix.swift_version }}-${{ matrix.os_version }}
