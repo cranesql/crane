@@ -21,4 +21,10 @@ public protocol MigrationTarget {
     /// - Returns: An array of schema history rows representing all executed migrations.
     /// - Throws: An error if the history cannot be retrieved from the target.
     func history() async throws -> [SchemaHistoryRow]
+
+    /// Execute the given SQL migration script.
+    ///
+    /// - Parameter sqlScript: The raw SQL script to execute.
+    /// - Throws: An error if the target couldn't execute the SQL script.
+    func execute(_ sqlScript: String) async throws
 }
