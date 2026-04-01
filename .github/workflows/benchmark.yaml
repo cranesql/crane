@@ -28,8 +28,8 @@ jobs:
       fail-fast: false
       matrix:
         swift:
-          - version: "6.2"
-            image: swift:6.2
+          - version: "6.3"
+            image: swift:6.3
 
     container:
       image: ${{ matrix.swift.image }}
