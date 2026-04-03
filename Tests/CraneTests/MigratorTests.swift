@@ -44,6 +44,16 @@ import Foundation
     }
 
     @Suite struct Apply {
+        @Test func `Sets up history before executing migrations`() async throws {
+            let resolver = MockResolver(migrations: [])
+            let target = MockTarget()
+
+            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            try await migrator.apply()
+
+            #expect(await target.setUpHistoryCallCount == 1)
+        }
+
         @Test func `Validates checksums of previously executed versioned migrations`() async throws {
             let resolver = MockResolver(
                 migrations: [
