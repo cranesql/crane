@@ -24,13 +24,13 @@ import Foundation
     @Test func `Defaults to file system resolver`() async throws {
         try await withTemporaryDirectories("migrations") { rootURL, urls in
             let migrationsURL = try #require(urls.first)
-            let script = "CREATE TABLE users (id UUID PRIMARY KEY);"
+            let script = SQLScriptStub.createUsersTable
             try script.write(
                 to: migrationsURL.appendingPathComponent("v1.create_users.apply.sql"),
                 atomically: true,
                 encoding: .utf8
             )
-            let target = MockTarget(historyResult: .success([]))
+            let target = MockTarget()
             let migrator = try Crane.Migrator(
                 rootPath: rootURL.path,
                 paths: ["migrations"],
@@ -39,52 +39,23 @@ import Foundation
 
             try await migrator.apply()
 
-            #expect(target.executedSQLScripts == [script])
+            #expect(await target.executedSQLScripts == [script])
         }
     }
 
     @Suite struct Apply {
         @Test func `Validates checksums of previously executed versioned migrations`() async throws {
-            let applyScript = "CREATE TABLE users (id UUID PRIMARY KEY);"
-            let undoScript = "DROP TABLE users;"
-
             let resolver = MockResolver(
-                migrationsResult: .success([
-                    ResolvedMigration(
-                        id: .apply(version: 1, description: "create_users"),
-                        description: "migrations/v1.create_users.apply.sql",
-                        sqlScript: { applyScript }
-                    ),
-                    ResolvedMigration(
-                        id: .undo(version: 1, description: "create_users"),
-                        description: "migrations/v1.create_users.undo.sql",
-                        sqlScript: { undoScript }
-                    ),
-                ])
+                migrations: [
+                    ResolvedMigration.Apply.createUsersTable(),
+                    ResolvedMigration.Undo.dropUsersTable(),
+                ]
             )
             let target = MockTarget(
-                historyResult: .success([
-                    SchemaHistoryRow(
-                        id: .apply(version: 1, description: "create_users"),
-                        rank: 1,
-                        description: "migrations/v1.create_users.apply.sql",
-                        checksum: checksum(sqlScript: applyScript),
-                        user: "slashmo",
-                        executionDate: .now,
-                        duration: .milliseconds(42),
-                        succeeded: true
-                    ),
-                    SchemaHistoryRow(
-                        id: .undo(version: 1, description: "create_users"),
-                        rank: 2,
-                        description: "migrations/v1.create_users.undo.sql",
-                        checksum: checksum(sqlScript: undoScript),
-                        user: "slashmo",
-                        executionDate: .now,
-                        duration: .milliseconds(42),
-                        succeeded: true
-                    ),
-                ])
+                history: [
+                    SchemaHistoryRow.Apply.createUsersTable(),
+                    SchemaHistoryRow.Undo.dropUsersTable(),
+                ]
             )
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
@@ -98,28 +69,11 @@ import Foundation
             let originalChecksum = checksum(sqlScript: originalScript)
 
             let resolver = MockResolver(
-                migrationsResult: .success([
-                    ResolvedMigration(
-                        id: .apply(version: 1, description: "create_users"),
-                        description: "migrations/v1.create_users.apply.sql",
-                        sqlScript: { modifiedScript }
-                    )
-                ])
+                migrations: [
+                    ResolvedMigration.Apply.createUsersTable(script: modifiedScript)
+                ]
             )
-            let target = MockTarget(
-                historyResult: .success([
-                    SchemaHistoryRow(
-                        id: .apply(version: 1, description: "create_users"),
-                        rank: 1,
-                        description: "migrations/v1.create_users.apply.sql",
-                        checksum: originalChecksum,
-                        user: "slashmo",
-                        executionDate: .now,
-                        duration: .milliseconds(42),
-                        succeeded: true
-                    )
-                ])
-            )
+            let target = MockTarget(history: [SchemaHistoryRow.Apply.createUsersTable()])
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
@@ -140,28 +94,11 @@ import Foundation
             let originalChecksum = checksum(sqlScript: originalScript)
 
             let resolver = MockResolver(
-                migrationsResult: .success([
-                    ResolvedMigration(
-                        id: .undo(version: 1, description: "create_users"),
-                        description: "migrations/v1.create_users.undo.sql",
-                        sqlScript: { modifiedScript }
-                    )
-                ])
+                migrations: [
+                    ResolvedMigration.Undo.dropUsersTable(script: modifiedScript)
+                ]
             )
-            let target = MockTarget(
-                historyResult: .success([
-                    SchemaHistoryRow(
-                        id: .undo(version: 1, description: "create_users"),
-                        rank: 1,
-                        description: "migrations/v1.create_users.undo.sql",
-                        checksum: originalChecksum,
-                        user: "slashmo",
-                        executionDate: .now,
-                        duration: .milliseconds(42),
-                        succeeded: true
-                    )
-                ])
-            )
+            let target = MockTarget(history: [SchemaHistoryRow.Undo.dropUsersTable()])
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
@@ -177,179 +114,227 @@ import Foundation
         }
 
         @Test func `Executes repeatable migration when checksum changed`() async throws {
-            let originalScript = "CREATE OR REPLACE VIEW active_users AS SELECT * FROM users WHERE active = true;"
             let modifiedScript = "CREATE OR REPLACE VIEW active_users AS SELECT * FROM users WHERE deleted_at IS NULL;"
-            let originalChecksum = checksum(sqlScript: originalScript)
 
             let resolver = MockResolver(
-                migrationsResult: .success([
-                    ResolvedMigration(
-                        id: .repeatable(description: "refresh_views"),
-                        description: "migrations/repeat.refresh_views.sql",
-                        sqlScript: { modifiedScript }
-                    )
-                ])
+                migrations: [
+                    ResolvedMigration.Repeatable.refreshViews(script: modifiedScript)
+                ]
             )
-            let target = MockTarget(
-                historyResult: .success([
-                    SchemaHistoryRow(
-                        id: .repeatable(description: "refresh_views"),
-                        rank: 1,
-                        description: "migrations/repeat.refresh_views.sql",
-                        checksum: originalChecksum,
-                        user: "slashmo",
-                        executionDate: .now,
-                        duration: .milliseconds(42),
-                        succeeded: true
-                    )
-                ])
-            )
+            let target = MockTarget(history: [SchemaHistoryRow.Repeatable.refreshViews()])
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
             try await migrator.apply()
 
-            #expect(target.executedSQLScripts == [modifiedScript])
+            #expect(await target.executedSQLScripts == [modifiedScript])
         }
 
         @Test func `Skips repeatable migration when checksum unchanged`() async throws {
-            let script = "CREATE OR REPLACE VIEW active_users AS SELECT * FROM users WHERE active = true;"
-
             let resolver = MockResolver(
-                migrationsResult: .success([
-                    ResolvedMigration(
-                        id: .repeatable(description: "refresh_views"),
-                        description: "migrations/repeat.refresh_views.sql",
-                        sqlScript: { script }
-                    )
-                ])
+                migrations: [
+                    ResolvedMigration.Repeatable.refreshViews()
+                ]
             )
-            let target = MockTarget(
-                historyResult: .success([
-                    SchemaHistoryRow(
-                        id: .repeatable(description: "refresh_views"),
-                        rank: 1,
-                        description: "migrations/repeat.refresh_views.sql",
-                        checksum: checksum(sqlScript: script),
-                        user: "slashmo",
-                        executionDate: .now,
-                        duration: .milliseconds(42),
-                        succeeded: true
-                    )
-                ])
-            )
+            let target = MockTarget(history: [SchemaHistoryRow.Repeatable.refreshViews()])
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
             try await migrator.apply()
 
-            #expect(target.executedSQLScripts.isEmpty)
+            #expect(await target.executedSQLScripts.isEmpty)
         }
 
         @Test func `Executes repeatable migration when never applied`() async throws {
-            let script = "CREATE OR REPLACE VIEW active_users AS SELECT * FROM users WHERE active = true;"
-
             let resolver = MockResolver(
-                migrationsResult: .success([
-                    ResolvedMigration(
-                        id: .repeatable(description: "refresh_views"),
-                        description: "migrations/repeat.refresh_views.sql",
-                        sqlScript: { script }
-                    )
-                ])
+                migrations: [
+                    ResolvedMigration.Repeatable.refreshViews()
+                ]
             )
-            let target = MockTarget(historyResult: .success([]))
+            let target = MockTarget()
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
             try await migrator.apply()
 
-            #expect(target.executedSQLScripts == [script])
+            #expect(await target.executedSQLScripts == [SQLScriptStub.createOrReplaceActiveUsersView])
         }
 
         @Test func `Executes pending versioned migration`() async throws {
-            let v1Script = "CREATE TABLE users (id UUID PRIMARY KEY);"
-            let v2Script = "ALTER TABLE users ADD COLUMN email TEXT NOT NULL;"
-
             let resolver = MockResolver(
-                migrationsResult: .success([
-                    ResolvedMigration(
-                        id: .apply(version: 1, description: "create_users"),
-                        description: "migrations/v1.create_users.apply.sql",
-                        sqlScript: { v1Script }
-                    ),
-                    ResolvedMigration(
-                        id: .apply(version: 2, description: "add_email"),
-                        description: "migrations/v2.add_email.apply.sql",
-                        sqlScript: { v2Script }
-                    ),
-                ])
+                migrations: [
+                    ResolvedMigration.Apply.createUsersTable(),
+                    ResolvedMigration.Apply.addEmailToUsersTable(),
+                ]
             )
-            let target = MockTarget(
-                historyResult: .success([
-                    SchemaHistoryRow(
-                        id: .apply(version: 1, description: "create_users"),
-                        rank: 1,
-                        description: "migrations/v1.create_users.apply.sql",
-                        checksum: checksum(sqlScript: v1Script),
-                        user: "slashmo",
-                        executionDate: .now,
-                        duration: .milliseconds(42),
-                        succeeded: true
-                    )
-                ])
-            )
+            let target = MockTarget(history: [SchemaHistoryRow.Apply.createUsersTable()])
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
             try await migrator.apply()
 
-            #expect(target.executedSQLScripts == [v2Script])
+            #expect(await target.executedSQLScripts == [SQLScriptStub.addEmailToUsersTable])
         }
 
         @Test func `Does not execute undo migrations`() async throws {
-            let applyScript = "CREATE TABLE users (id UUID PRIMARY KEY);"
-            let undoScript = "DROP TABLE users;"
-
             let resolver = MockResolver(
-                migrationsResult: .success([
-                    ResolvedMigration(
-                        id: .apply(version: 1, description: "create_users"),
-                        description: "migrations/v1.create_users.apply.sql",
-                        sqlScript: { applyScript }
-                    ),
-                    ResolvedMigration(
-                        id: .undo(version: 1, description: "create_users"),
-                        description: "migrations/v1.create_users.undo.sql",
-                        sqlScript: { undoScript }
-                    ),
-                ])
+                migrations: [
+                    ResolvedMigration.Apply.createUsersTable(),
+                    ResolvedMigration.Undo.dropUsersTable(),
+                ]
             )
-            let target = MockTarget(historyResult: .success([]))
+            let target = MockTarget()
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
             try await migrator.apply()
 
-            #expect(target.executedSQLScripts == [applyScript])
+            #expect(await target.executedSQLScripts == [SQLScriptStub.createUsersTable])
+        }
+
+        @Suite struct `History recording` {
+            @Test func `Records executed versioned migration`() async throws {
+                let resolver = MockResolver(
+                    migrations: [
+                        ResolvedMigration.Apply.createUsersTable()
+                    ]
+                )
+                let target = MockTarget()
+
+                let migrator = Crane.Migrator(
+                    resolver: resolver,
+                    target: target,
+                    measure: {
+                        try await $0()
+                        return .milliseconds(42)
+                    },
+                    now: { .stub }
+                )
+                try await migrator.apply()
+
+                #expect(
+                    await target.recordedRows == [
+                        SchemaHistoryRow.Apply.createUsersTable()
+                    ]
+                )
+            }
+
+            @Test func `Records executed repeatable migration`() async throws {
+                let resolver = MockResolver(
+                    migrations: [
+                        ResolvedMigration.Repeatable.refreshViews()
+                    ]
+                )
+                let target = MockTarget()
+
+                let migrator = Crane.Migrator(
+                    resolver: resolver,
+                    target: target,
+                    measure: {
+                        try await $0()
+                        return .milliseconds(42)
+                    },
+                    now: { .stub }
+                )
+                try await migrator.apply()
+
+                #expect(
+                    await target.recordedRows == [
+                        SchemaHistoryRow.Repeatable.refreshViews()
+                    ]
+                )
+            }
+
+            @Test func `Does not record already applied migration`() async throws {
+                let resolver = MockResolver(
+                    migrations: [
+                        ResolvedMigration.Apply.createUsersTable()
+                    ]
+                )
+                let target = MockTarget(history: [SchemaHistoryRow.Apply.createUsersTable()])
+
+                let migrator = Crane.Migrator(resolver: resolver, target: target)
+                try await migrator.apply()
+
+                #expect(await target.recordedRows.isEmpty)
+            }
+
+            @Test func `Records multiple migrations with incrementing ranks`() async throws {
+                let resolver = MockResolver(
+                    migrations: [
+                        ResolvedMigration.Apply.createUsersTable(),
+                        ResolvedMigration.Apply.addEmailToUsersTable(),
+                        ResolvedMigration.Repeatable.refreshViews(),
+                    ]
+                )
+                let target = MockTarget()
+
+                let migrator = Crane.Migrator(
+                    resolver: resolver,
+                    target: target,
+                    measure: {
+                        try await $0()
+                        return .milliseconds(42)
+                    },
+                    now: { .stub }
+                )
+                try await migrator.apply()
+
+                #expect(
+                    await target.recordedRows == [
+                        SchemaHistoryRow.Apply.createUsersTable(),
+                        SchemaHistoryRow.Apply.addEmailToUsersTable(),
+                        SchemaHistoryRow.Repeatable.refreshViews(rank: 3),
+                    ]
+                )
+            }
+
+            @Test func `Continues rank from existing history`() async throws {
+                let resolver = MockResolver(
+                    migrations: [
+                        ResolvedMigration.Apply.createUsersTable(),
+                        ResolvedMigration.Apply.addEmailToUsersTable(),
+                    ]
+                )
+                let target = MockTarget(history: [SchemaHistoryRow.Apply.createUsersTable()])
+
+                let migrator = Crane.Migrator(
+                    resolver: resolver,
+                    target: target,
+                    measure: {
+                        try await $0()
+                        return .milliseconds(42)
+                    },
+                    now: { .stub }
+                )
+                try await migrator.apply()
+
+                #expect(
+                    await target.recordedRows == [
+                        SchemaHistoryRow.Apply.addEmailToUsersTable()
+                    ]
+                )
+            }
+        }
+
+        @Test func `Wraps each migration in a transaction`() async throws {
+            let resolver = MockResolver(
+                migrations: [
+                    ResolvedMigration.Apply.createUsersTable(),
+                    ResolvedMigration.Apply.addEmailToUsersTable(),
+                ]
+            )
+            let target = MockTarget()
+
+            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            try await migrator.apply()
+
+            #expect(await target.transactionCount == 2)
         }
 
         @Test func `Throws validation error when apply migration is missing`() async throws {
-            let resolver = MockResolver(migrationsResult: .success([]))
-            let target = MockTarget(
-                historyResult: .success([
-                    SchemaHistoryRow(
-                        id: .apply(version: 1, description: "create_users"),
-                        rank: 1,
-                        description: "migrations/v1.create_users.apply.sql",
-                        checksum: checksum(sqlScript: "CREATE TABLE users (id UUID PRIMARY KEY);"),
-                        user: "slashmo",
-                        executionDate: .now,
-                        duration: .milliseconds(42),
-                        succeeded: true
-                    )
-                ])
-            )
+            let resolver = MockResolver(migrations: [])
+            let target = MockTarget(history: [SchemaHistoryRow.Apply.createUsersTable()])
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
@@ -364,21 +349,8 @@ import Foundation
         }
 
         @Test func `Throws validation error when undo migration is missing`() async throws {
-            let resolver = MockResolver(migrationsResult: .success([]))
-            let target = MockTarget(
-                historyResult: .success([
-                    SchemaHistoryRow(
-                        id: .undo(version: 1, description: "create_users"),
-                        rank: 1,
-                        description: "migrations/v1.create_users.undo.sql",
-                        checksum: checksum(sqlScript: "DROP TABLE users;"),
-                        user: "slashmo",
-                        executionDate: .now,
-                        duration: .milliseconds(42),
-                        succeeded: true
-                    )
-                ])
-            )
+            let resolver = MockResolver(migrations: [])
+            let target = MockTarget(history: [SchemaHistoryRow.Undo.dropUsersTable()])
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
@@ -394,32 +366,24 @@ import Foundation
 
         @Test func `Throws validation error when repeatable migration has version`() async throws {
             let resolver = MockResolver(
-                migrationsResult: .success(
-                    [
-                        ResolvedMigration(
-                            id: .repeatable(description: "refresh_views"),
-                            description: "migrations/repeat.refresh_views.sql",
-                            sqlScript: { "SELECT VERSION();" }
-                        )
-                    ]
-                )
+                migrations: [
+                    ResolvedMigration.Repeatable.refreshViews()
+                ]
             )
             let target = MockTarget(
-                historyResult: .success(
-                    [
-                        SchemaHistoryRow(
-                            rank: 1,
-                            version: 42,
-                            description: "migrations/repeat.refresh_views.sql",
-                            type: .repeatable,
-                            checksum: checksum(sqlScript: "SELECT VERSION();"),
-                            user: "slashmo",
-                            executionDate: .now,
-                            duration: .milliseconds(42),
-                            succeeded: true
-                        )
-                    ]
-                )
+                history: [
+                    SchemaHistoryRow(
+                        rank: 1,
+                        version: 42,
+                        description: "migrations/repeat.refresh_views.sql",
+                        type: .repeatable,
+                        checksum: checksum(sqlScript: "SELECT VERSION();"),
+                        user: "mock_user",
+                        executionDate: .stub,
+                        duration: .milliseconds(42),
+                        succeeded: true
+                    )
+                ]
             )
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
@@ -434,34 +398,25 @@ import Foundation
         }
 
         @Test func `Throws validation error when apply migration has no version`() async throws {
-            let applyScript = "CREATE TABLE users (id UUID PRIMARY KEY);"
             let resolver = MockResolver(
-                migrationsResult: .success(
-                    [
-                        ResolvedMigration(
-                            id: .apply(version: 1, description: "create_users"),
-                            description: "migrations/v1.create_users.apply.sql",
-                            sqlScript: { applyScript }
-                        )
-                    ]
-                )
+                migrations: [
+                    ResolvedMigration.Apply.createUsersTable()
+                ]
             )
             let target = MockTarget(
-                historyResult: .success(
-                    [
-                        SchemaHistoryRow(
-                            rank: 1,
-                            version: nil,
-                            description: "migrations/v1.create_users.apply.sql",
-                            type: .apply,
-                            checksum: checksum(sqlScript: applyScript),
-                            user: "slashmo",
-                            executionDate: .now,
-                            duration: .milliseconds(42),
-                            succeeded: true
-                        )
-                    ]
-                )
+                history: [
+                    SchemaHistoryRow(
+                        rank: 1,
+                        version: nil,
+                        description: "migrations/v1.create_users.apply.sql",
+                        type: .apply,
+                        checksum: checksum(sqlScript: SQLScriptStub.createUsersTable),
+                        user: "mock_user",
+                        executionDate: .stub,
+                        duration: .milliseconds(42),
+                        succeeded: true
+                    )
+                ]
             )
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
@@ -476,34 +431,25 @@ import Foundation
         }
 
         @Test func `Throws validation error when undo migration has no version`() async throws {
-            let undoScript = "DROP TABLE users;"
             let resolver = MockResolver(
-                migrationsResult: .success(
-                    [
-                        ResolvedMigration(
-                            id: .undo(version: 1, description: "create_users"),
-                            description: "migrations/v1.create_users.undo.sql",
-                            sqlScript: { undoScript }
-                        )
-                    ]
-                )
+                migrations: [
+                    ResolvedMigration.Undo.dropUsersTable()
+                ]
             )
             let target = MockTarget(
-                historyResult: .success(
-                    [
-                        SchemaHistoryRow(
-                            rank: 1,
-                            version: nil,
-                            description: "migrations/v1.create_users.undo.sql",
-                            type: .undo,
-                            checksum: checksum(sqlScript: undoScript),
-                            user: "slashmo",
-                            executionDate: .now,
-                            duration: .milliseconds(42),
-                            succeeded: true
-                        )
-                    ]
-                )
+                history: [
+                    SchemaHistoryRow(
+                        rank: 1,
+                        version: nil,
+                        description: "migrations/v1.create_users.undo.sql",
+                        type: .undo,
+                        checksum: checksum(sqlScript: SQLScriptStub.dropUsersTable),
+                        user: "mock_user",
+                        executionDate: .stub,
+                        duration: .milliseconds(42),
+                        succeeded: true
+                    )
+                ]
             )
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
@@ -522,24 +468,187 @@ import Foundation
 private struct MockResolver: MigrationResolver {
     let migrationsResult: Result<[ResolvedMigration], any Error>
 
+    init(migrations: [ResolvedMigration]) {
+        self.migrationsResult = .success(migrations)
+    }
+
     func migrations() async throws -> [ResolvedMigration] {
         try migrationsResult.get()
     }
 }
 
-private final class MockTarget: MigrationTarget {
-    var executedSQLScripts = [String]()
-    private let historyResult: Result<[SchemaHistoryRow], any Error>
+extension Date {
+    fileprivate static let stub = Date(timeIntervalSince1970: 42)
+}
 
-    init(historyResult: Result<[SchemaHistoryRow], any Error>) {
-        self.historyResult = historyResult
+extension SchemaHistoryRow {
+    /// Creates a history row with sensible defaults for fields that are typically irrelevant in tests.
+    fileprivate init(
+        id: MigrationID,
+        rank: Int = 1,
+        description: String,
+        checksum: String,
+        user: String = "mock_user",
+        executionDate: Date = .stub,
+        duration: Duration = .milliseconds(42),
+        succeeded: Bool = true
+    ) {
+        let version: Int?
+        let type: MigrationType
+        switch id {
+        case .apply(let v, _):
+            version = v
+            type = .apply
+        case .undo(let v, _):
+            version = v
+            type = .undo
+        case .repeatable:
+            version = nil
+            type = .repeatable
+        }
+        self.init(
+            rank: rank,
+            version: version,
+            description: description,
+            type: type,
+            checksum: checksum,
+            user: user,
+            executionDate: executionDate,
+            duration: duration,
+            succeeded: succeeded
+        )
+    }
+}
+
+private enum SQLScriptStub {
+    static let createUsersTable = "CREATE TABLE users (id UUID PRIMARY KEY);"
+    static let addEmailToUsersTable = "ALTER TABLE users ADD COLUMN email TEXT NOT NULL;"
+    static let dropUsersTable = "DROP TABLE users;"
+    static let createOrReplaceActiveUsersView = """
+        CREATE OR REPLACE VIEW active_users AS SELECT * FROM users WHERE active = true;
+        """
+}
+
+extension ResolvedMigration {
+    fileprivate enum Apply {
+        static func createUsersTable(
+            script: String = SQLScriptStub.createUsersTable
+        ) -> ResolvedMigration {
+            ResolvedMigration(
+                id: .apply(version: 1, description: "create_users"),
+                description: "migrations/v1.create_users.apply.sql",
+                sqlScript: { script }
+            )
+        }
+
+        static func addEmailToUsersTable(
+            script: String = SQLScriptStub.addEmailToUsersTable
+        ) -> ResolvedMigration {
+            ResolvedMigration(
+                id: .apply(version: 2, description: "add_email"),
+                description: "migrations/v2.add_email.apply.sql",
+                sqlScript: { script }
+            )
+        }
     }
 
-    func history() async throws -> [SchemaHistoryRow] {
-        try historyResult.get()
+    fileprivate enum Undo {
+        static func dropUsersTable(
+            script: String = SQLScriptStub.dropUsersTable
+        ) -> ResolvedMigration {
+            ResolvedMigration(
+                id: .undo(version: 1, description: "create_users"),
+                description: "migrations/v1.create_users.undo.sql",
+                sqlScript: { script }
+            )
+        }
     }
 
-    func execute(_ sql: String) async throws {
-        executedSQLScripts.append(sql)
+    fileprivate enum Repeatable {
+        static func refreshViews(
+            script: String = SQLScriptStub.createOrReplaceActiveUsersView
+        ) -> ResolvedMigration {
+            ResolvedMigration(
+                id: .repeatable(description: "refresh_views"),
+                description: "migrations/repeat.refresh_views.sql",
+                sqlScript: { script }
+            )
+        }
+    }
+}
+
+extension SchemaHistoryRow {
+    fileprivate enum Apply {
+        static func createUsersTable(
+            rank: Int = 1,
+            user: String = "mock_user",
+            executionDate: Date = .stub,
+            duration: Duration = .milliseconds(42)
+        ) -> SchemaHistoryRow {
+            SchemaHistoryRow(
+                id: .apply(version: 1, description: "create_users"),
+                rank: rank,
+                description: "migrations/v1.create_users.apply.sql",
+                checksum: Crane.checksum(sqlScript: SQLScriptStub.createUsersTable),
+                user: user,
+                executionDate: executionDate,
+                duration: duration
+            )
+        }
+
+        static func addEmailToUsersTable(
+            rank: Int = 2,
+            user: String = "mock_user",
+            executionDate: Date = .stub,
+            duration: Duration = .milliseconds(42)
+        ) -> SchemaHistoryRow {
+            SchemaHistoryRow(
+                id: .apply(version: 2, description: "add_email"),
+                rank: rank,
+                description: "migrations/v2.add_email.apply.sql",
+                checksum: Crane.checksum(sqlScript: SQLScriptStub.addEmailToUsersTable),
+                user: user,
+                executionDate: executionDate,
+                duration: duration
+            )
+        }
+    }
+
+    fileprivate enum Undo {
+        static func dropUsersTable(
+            rank: Int = 2,
+            user: String = "mock_user",
+            executionDate: Date = .stub,
+            duration: Duration = .milliseconds(42)
+        ) -> SchemaHistoryRow {
+            SchemaHistoryRow(
+                id: .undo(version: 1, description: "create_users"),
+                rank: rank,
+                description: "migrations/v1.create_users.undo.sql",
+                checksum: Crane.checksum(sqlScript: SQLScriptStub.dropUsersTable),
+                user: user,
+                executionDate: executionDate,
+                duration: duration
+            )
+        }
+    }
+
+    fileprivate enum Repeatable {
+        static func refreshViews(
+            rank: Int = 1,
+            user: String = "mock_user",
+            executionDate: Date = .stub,
+            duration: Duration = .milliseconds(42)
+        ) -> SchemaHistoryRow {
+            SchemaHistoryRow(
+                id: .repeatable(description: "refresh_views"),
+                rank: rank,
+                description: "migrations/repeat.refresh_views.sql",
+                checksum: Crane.checksum(sqlScript: SQLScriptStub.createOrReplaceActiveUsersView),
+                user: user,
+                executionDate: executionDate,
+                duration: duration
+            )
+        }
     }
 }
