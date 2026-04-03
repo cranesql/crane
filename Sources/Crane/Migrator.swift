@@ -17,9 +17,11 @@ public import FoundationEssentials
 public import Foundation
 #endif
 
-public struct Migrator<Target: MigrationTarget> {
+public struct Migrator<Target: MigrationTarget>: Sendable {
     private let resolver: any MigrationResolver
     private let target: Target
+    private let measure: @Sendable (_ work: @Sendable () async throws -> Void) async throws -> Duration
+    private let now: @Sendable () -> Date
 
     public init(
         rootPath: String = FileManager.default.currentDirectoryPath,
@@ -30,35 +32,90 @@ public struct Migrator<Target: MigrationTarget> {
         self.init(resolver: resolver, target: target)
     }
 
-    package init(resolver: some MigrationResolver, target: Target) {
+    package init(
+        resolver: some MigrationResolver,
+        target: Target,
+        measure: @escaping @Sendable (_ work: @Sendable () async throws -> Void) async throws -> Duration = {
+            try await ContinuousClock().measure($0)
+        },
+        now: @escaping @Sendable () -> Date = { .now }
+    ) {
         self.resolver = resolver
         self.target = target
+        self.measure = measure
+        self.now = now
     }
 
     public func apply() async throws {
         let resolvedMigrations = try await resolver.migrations()
         let history = try await target.history()
         let state = try await validatedMigrationState(resolved: resolvedMigrations, history: history)
+        let user = try await target.currentUser()
+        var nextRank = history.count + 1
 
         for migration in resolvedMigrations {
             switch migration.id {
             case .apply(let version, _):
                 let key = VersionedHistoryKey(version: version, type: .apply)
                 if !state.appliedVersionedKeys.contains(key) {
-                    try await target.execute(migration.sqlScript)
+                    let sqlScript = try await migration.sqlScript
+                    try await executeMigration(
+                        id: migration.id,
+                        description: migration.description,
+                        sqlScript: sqlScript,
+                        rank: nextRank,
+                        user: user
+                    )
+                    nextRank += 1
                 }
             case .undo:
                 continue
             case .repeatable:
-                let script = try await migration.sqlScript
+                let sqlScript = try await migration.sqlScript
+                let scriptChecksum = checksum(sqlScript: sqlScript)
+                let shouldExecute: Bool
                 if let lastChecksum = state.lastRepeatableChecksums[migration.description] {
-                    if checksum(sqlScript: script) != lastChecksum {
-                        try await target.execute(script)
-                    }
+                    shouldExecute = scriptChecksum != lastChecksum
                 } else {
-                    try await target.execute(script)
+                    shouldExecute = true
+                }
+                if shouldExecute {
+                    try await executeMigration(
+                        id: migration.id,
+                        description: migration.description,
+                        sqlScript: sqlScript,
+                        rank: nextRank,
+                        user: user
+                    )
+                    nextRank += 1
                 }
             }
+        }
+    }
+
+    private func executeMigration(
+        id: MigrationID,
+        description: String,
+        sqlScript: String,
+        rank: Int,
+        user: String
+    ) async throws {
+        let scriptChecksum = checksum(sqlScript: sqlScript)
+        try await target.withTransaction {
+            let duration = try await measure {
+                try await target.execute(sqlScript)
+            }
+            let row = SchemaHistoryRow(
+                id: id,
+                rank: rank,
+                description: description,
+                checksum: scriptChecksum,
+                user: user,
+                executionDate: now(),
+                duration: duration,
+                succeeded: true
+            )
+            try await target.record(row)
         }
     }
 
