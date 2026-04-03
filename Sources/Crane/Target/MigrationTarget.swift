@@ -13,6 +13,11 @@
 
 /// A target database that executes and keeps track of migrations.
 public protocol MigrationTarget: Sendable {
+    /// Set up the schema history table, creating it if it doesn't already exist.
+    ///
+    /// Called by the migrator before any other operations on the target.
+    func setUpHistory() async throws
+
     /// Retrieve the username of the current database connection.
     ///
     /// Used to populate the `user` field of ``SchemaHistoryRow`` when recording migrations.

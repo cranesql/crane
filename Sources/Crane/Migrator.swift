@@ -47,6 +47,7 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
     }
 
     public func apply() async throws {
+        try await target.setUpHistory()
         let resolvedMigrations = try await resolver.migrations()
         let history = try await target.history()
         let state = try await validatedMigrationState(resolved: resolvedMigrations, history: history)
