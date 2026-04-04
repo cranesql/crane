@@ -15,6 +15,10 @@ import Testing
 
 @testable import Crane
 
+#if Configuration
+import Configuration
+#endif
+
 #if canImport(FoundationEssentials)
 import FoundationEssentials
 #else
@@ -160,6 +164,71 @@ struct `File-System Migration Resolver` {
             try FileSystemMigrationResolver(paths: [])
         }
     }
+
+    #if Configuration
+    @Suite struct `Configuration` {
+        @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, *)
+        @Test func `Reads rootPath and paths from config reader`() async throws {
+            try await withTemporaryDirectories("sql") { rootURL, urls in
+                try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
+                    to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+
+                let reader = ConfigReader(
+                    provider: InMemoryProvider(values: [
+                        "rootPath": ConfigValue(.string(rootURL.path), isSecret: false),
+                        "paths": ConfigValue(.stringArray(["sql"]), isSecret: false),
+                    ])
+                )
+                let resolver = try FileSystemMigrationResolver(reader: reader)
+
+                let migrations = try await resolver.migrations()
+
+                #expect(
+                    try await migrations.equatable == [
+                        EquatableResolvedMigration(
+                            id: .apply(version: 1, description: "create_users"),
+                            description: "sql/v1.create_users.apply.sql",
+                            sqlScript: "CREATE TABLE users (id UUID PRIMARY KEY);"
+                        )
+                    ]
+                )
+            }
+        }
+
+        @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, *)
+        @Test func `Defaults to migrations path`() async throws {
+            try await withTemporaryDirectories("migrations") { rootURL, urls in
+                try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
+                    to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+
+                let reader = ConfigReader(
+                    provider: InMemoryProvider(values: [
+                        "rootPath": ConfigValue(.string(rootURL.path), isSecret: false)
+                    ])
+                )
+                let resolver = try FileSystemMigrationResolver(reader: reader)
+
+                let migrations = try await resolver.migrations()
+
+                #expect(
+                    try await migrations.equatable == [
+                        EquatableResolvedMigration(
+                            id: .apply(version: 1, description: "create_users"),
+                            description: "migrations/v1.create_users.apply.sql",
+                            sqlScript: "CREATE TABLE users (id UUID PRIMARY KEY);"
+                        )
+                    ]
+                )
+            }
+        }
+    }
+    #endif
 }
 
 extension [ResolvedMigration] {

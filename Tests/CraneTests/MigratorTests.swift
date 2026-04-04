@@ -14,6 +14,10 @@
 import Crane
 import Testing
 
+#if Configuration
+import Configuration
+#endif
+
 #if canImport(FoundationEssentials)
 import FoundationEssentials
 #else
@@ -473,6 +477,37 @@ import Foundation
             }
         }
     }
+
+    #if Configuration
+    @Suite struct `Config Reader` {
+        @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, *)
+        @Test func `Reads rootPath and paths from config reader`() async throws {
+            let script = SQLScriptStub.createUsersTable
+
+            try await withTemporaryDirectories("sql") { rootURL, urls in
+                let sqlURL = try #require(urls.first)
+                try script.write(
+                    to: sqlURL.appendingPathComponent("v1.create_users.apply.sql"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+
+                let reader = ConfigReader(
+                    provider: InMemoryProvider(values: [
+                        "crane.rootPath": ConfigValue(.string(rootURL.path), isSecret: false),
+                        "crane.paths": ConfigValue(.stringArray(["sql"]), isSecret: false),
+                    ])
+                )
+                let target = MockTarget()
+                let migrator = try Crane.Migrator(reader: reader, target: target)
+
+                try await migrator.apply()
+
+                #expect(await target.executedSQLScripts == [script])
+            }
+        }
+    }
+    #endif
 }
 
 private struct MockResolver: MigrationResolver {
