@@ -17,21 +17,35 @@ let package = Package(
     products: [
         .library(name: "Crane", targets: ["Crane"])
     ],
+    traits: [
+        .trait(name: "Configuration", description: "Swift Configuration support for Crane.")
+    ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"5.0.0")
+        .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"5.0.0"),
+        .package(url: "https://github.com/apple/swift-configuration.git", from: "1.0.0"),
     ],
     targets: [
         .target(
             name: "Crane",
             dependencies: [
-                .product(name: "Crypto", package: "swift-crypto")
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(
+                    name: "Configuration",
+                    package: "swift-configuration",
+                    condition: .when(traits: ["Configuration"])
+                ),
             ],
             swiftSettings: sharedSwiftSettings
         ),
         .testTarget(
             name: "CraneTests",
             dependencies: [
-                .target(name: "Crane")
+                .target(name: "Crane"),
+                .product(
+                    name: "Configuration",
+                    package: "swift-configuration",
+                    condition: .when(traits: ["Configuration"])
+                ),
             ],
             swiftSettings: sharedSwiftSettings
         ),

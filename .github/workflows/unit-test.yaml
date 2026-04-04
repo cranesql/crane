@@ -25,10 +25,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
       - name: Build / Test
-        run: swift test --parallel --enable-code-coverage --xunit-output junit.xml
+        run: swift test --parallel --enable-all-traits --enable-code-coverage --xunit-output junit.xml
       - name: Merge code coverage
         run: |
-          CODECOV_DIR=$(dirname "$(swift test --show-codecov-path)")
+          CODECOV_DIR=$(dirname "$(swift test --enable-all-traits --show-codecov-path)")
           BIN=$(find "$CODECOV_DIR"/.. -name '*.xctest' -o -name 'CraneTests.so' | head -1)
           llvm-cov export -format "lcov" \
             "$BIN" \
@@ -78,10 +78,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
       - name: Build / Test
-        run: swift test --parallel --enable-code-coverage --xunit-output junit.xml
+        run: swift test --parallel --enable-all-traits --enable-code-coverage --xunit-output junit.xml
       - name: Merge code coverage
         run: |
-          CODECOV_DIR=$(dirname "$(swift test --show-codecov-path)")
+          CODECOV_DIR=$(dirname "$(swift test --enable-all-traits --show-codecov-path)")
           BIN=$(find "$CODECOV_DIR"/.. -name '*.xctest' -exec echo '{}/Contents/MacOS/cranePackageTests' \; -o -name 'CraneTests.so' | head -1)
           xcrun llvm-cov export -format "lcov" \
             "$BIN" \
@@ -121,4 +121,5 @@ jobs:
         uses: skiptools/swift-android-action@v2.9.2
         with:
           android-api-level: ${{ matrix.android_api_level }}
+          swift-build-flags: --enable-all-traits
           free-disk-space: true
