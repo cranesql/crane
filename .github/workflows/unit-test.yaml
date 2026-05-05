@@ -118,7 +118,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
       - name: Build and test on Android emulator
-        uses: skiptools/swift-android-action@v2.9.2
+        uses: skiptools/swift-android-action@v2.9.4
         with:
           android-api-level: ${{ matrix.android_api_level }}
           swift-build-flags: --enable-all-traits
