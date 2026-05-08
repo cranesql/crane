@@ -25,8 +25,8 @@ public struct SchemaHistoryRow: Hashable, Sendable {
     /// Version number for versioned migrations, nil for repeatable migrations.
     public let version: Int?
 
-    /// Description of the migration. For file-system resolvers, this contains the relative file path.
-    /// Other resolvers may use this field to store resolver-specific identifying information.
+    /// Human-readable description of the migration, parsed from the migration's identifier
+    /// (e.g. "create_users").
     public let description: String
 
     /// Type of migration.
@@ -52,7 +52,7 @@ public struct SchemaHistoryRow: Hashable, Sendable {
     /// - Parameters:
     ///   - rank: Order in which this migration was applied.
     ///   - version: Version number for versioned migrations, nil for repeatable migrations.
-    ///   - description: Description of the migration. For file-system resolvers, this contains the relative file path.
+    ///   - description: Human-readable description parsed from the migration identifier.
     ///   - type: Type of migration operation.
     ///   - checksum: Checksum for detecting changes to the migration script.
     ///   - user: Database user who executed the migration.
@@ -84,7 +84,6 @@ public struct SchemaHistoryRow: Hashable, Sendable {
     package init(
         id: MigrationID,
         rank: Int,
-        description: String,
         checksum: String,
         user: String,
         executionDate: Date,
@@ -103,7 +102,7 @@ public struct SchemaHistoryRow: Hashable, Sendable {
             self.type = .repeatable
         }
         self.rank = rank
-        self.description = description
+        self.description = id.description
         self.checksum = checksum
         self.user = user
         self.executionDate = executionDate

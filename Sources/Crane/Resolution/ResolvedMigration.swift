@@ -14,17 +14,17 @@
 /// A migration that has been resolved by a ``MigrationResolver``.
 ///
 /// This type represents a migration that has been discovered and can be executed.
-/// It contains the migration's identity, a description, and provides access to the SQL script.
+/// It contains the migration's identity, a pointer to its source, and provides access to the SQL script.
 package struct ResolvedMigration: Identifiable {
     /// The unique identifier for this migration.
     package let id: MigrationID
 
-    /// A description of the migration source.
+    /// A pointer to the migration source.
     ///
     /// The content of this field depends on the resolver that created the migration:
     /// - For file-system resolvers: Contains the relative file path (e.g., "migrations/v1.create_users.apply.sql")
     /// - For other resolvers: May contain resolver-specific identifying information
-    package let description: String
+    package let script: String
 
     private let _sqlScript: @Sendable () async throws -> String
 
@@ -41,11 +41,11 @@ package struct ResolvedMigration: Identifiable {
     ///
     /// - Parameters:
     ///   - id: The unique identifier for the migration.
-    ///   - description: A description of the migration source. For file-system resolvers, this should be the relative file path.
+    ///   - script: A pointer to the migration source. For file-system resolvers, this should be the relative file path.
     ///   - sqlScript: A closure that provides the SQL script content when called. This allows for lazy loading of the script.
-    package init(id: MigrationID, description: String, sqlScript: @escaping @Sendable () async throws -> String) {
+    package init(id: MigrationID, script: String, sqlScript: @escaping @Sendable () async throws -> String) {
         self.id = id
-        self.description = description
+        self.script = script
         self._sqlScript = sqlScript
     }
 }
