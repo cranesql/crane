@@ -62,7 +62,6 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
                     let sqlScript = try await migration.sqlScript
                     try await executeMigration(
                         id: migration.id,
-                        description: migration.description,
                         sqlScript: sqlScript,
                         rank: nextRank,
                         user: user
@@ -71,11 +70,11 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
                 }
             case .undo:
                 continue
-            case .repeatable:
+            case .repeatable(let description):
                 let sqlScript = try await migration.sqlScript
                 let scriptChecksum = checksum(sqlScript: sqlScript)
                 let shouldExecute: Bool
-                if let lastChecksum = state.lastRepeatableChecksums[migration.description] {
+                if let lastChecksum = state.lastRepeatableChecksums[description] {
                     shouldExecute = scriptChecksum != lastChecksum
                 } else {
                     shouldExecute = true
@@ -83,7 +82,6 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
                 if shouldExecute {
                     try await executeMigration(
                         id: migration.id,
-                        description: migration.description,
                         sqlScript: sqlScript,
                         rank: nextRank,
                         user: user
@@ -96,7 +94,6 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
 
     private func executeMigration(
         id: MigrationID,
-        description: String,
         sqlScript: String,
         rank: Int,
         user: String
@@ -109,7 +106,6 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
             let row = SchemaHistoryRow(
                 id: id,
                 rank: rank,
-                description: description,
                 checksum: scriptChecksum,
                 user: user,
                 executionDate: now(),
@@ -123,7 +119,7 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
     /// Errors that can occur during migration validation.
     package enum ValidationError: Error, Equatable {
         /// A migration file has been modified after being applied to the database.
-        case checksumMismatch(id: MigrationID, description: String, expected: String, actual: String)
+        case checksumMismatch(id: MigrationID, script: String, expected: String, actual: String)
 
         /// A previously executed migration is no longer resolved by the migration resolver.
         case missingMigration(version: Int, type: SchemaHistoryRow.MigrationType, description: String)
@@ -176,7 +172,7 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
                 if currentChecksum != row.checksum {
                     throw ValidationError.checksumMismatch(
                         id: resolvedMigration.id,
-                        description: row.description,
+                        script: resolvedMigration.script,
                         expected: row.checksum,
                         actual: currentChecksum
                     )
@@ -187,7 +183,8 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
             case .repeatable:
                 if let version = row.version {
                     throw ValidationError.repeatableMigrationWithVersion(
-                        version: version, description: row.description
+                        version: version,
+                        description: row.description
                     )
                 }
 

@@ -16,6 +16,13 @@ package enum MigrationID: Hashable, Comparable {
     case undo(version: Int, description: String)
     case repeatable(description: String)
 
+    package var description: String {
+        switch self {
+        case .apply(_, let description), .undo(_, let description), .repeatable(let description):
+            description
+        }
+    }
+
     package static func < (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case let (.apply(lhsVersion, _), .apply(rhsVersion, _)):

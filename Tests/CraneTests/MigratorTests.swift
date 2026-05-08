@@ -93,7 +93,7 @@ import Foundation
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.checksumMismatch(
                 id: .apply(version: 1, description: "create_users"),
-                description: "migrations/v1.create_users.apply.sql",
+                script: "migrations/v1.create_users.apply.sql",
                 expected: originalChecksum,
                 actual: checksum(sqlScript: modifiedScript)
             )
@@ -118,7 +118,7 @@ import Foundation
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.checksumMismatch(
                 id: .undo(version: 1, description: "create_users"),
-                description: "migrations/v1.create_users.undo.sql",
+                script: "migrations/v1.create_users.undo.sql",
                 expected: originalChecksum,
                 actual: checksum(sqlScript: modifiedScript)
             )
@@ -151,6 +151,23 @@ import Foundation
                 ]
             )
             let target = MockTarget(history: [SchemaHistoryRow.Repeatable.refreshViews()])
+
+            let migrator = Crane.Migrator(resolver: resolver, target: target)
+
+            try await migrator.apply()
+
+            #expect(await target.executedSQLScripts.isEmpty)
+        }
+
+        @Test func `Skips moved repeatable migration when checksum unchanged`() async throws {
+            let resolver = MockResolver(
+                migrations: [
+                    ResolvedMigration.Repeatable.refreshViews(path: "migrations/repeatable/repeat.refresh_views.sql")
+                ]
+            )
+            let target = MockTarget(
+                history: [SchemaHistoryRow.Repeatable.refreshViews()]
+            )
 
             let migrator = Crane.Migrator(resolver: resolver, target: target)
 
@@ -355,7 +372,7 @@ import Foundation
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.missingMigration(
                 version: 1,
                 type: .apply,
-                description: "migrations/v1.create_users.apply.sql"
+                description: "create_users"
             )
             await #expect(throws: expectedError) {
                 try await migrator.apply()
@@ -371,7 +388,7 @@ import Foundation
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.missingMigration(
                 version: 1,
                 type: .undo,
-                description: "migrations/v1.create_users.undo.sql"
+                description: "create_users"
             )
             await #expect(throws: expectedError) {
                 try await migrator.apply()
@@ -389,7 +406,7 @@ import Foundation
                     SchemaHistoryRow(
                         rank: 1,
                         version: 42,
-                        description: "migrations/repeat.refresh_views.sql",
+                        description: "refresh_views",
                         type: .repeatable,
                         checksum: checksum(sqlScript: "SELECT VERSION();"),
                         user: "mock_user",
@@ -404,7 +421,7 @@ import Foundation
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.repeatableMigrationWithVersion(
                 version: 42,
-                description: "migrations/repeat.refresh_views.sql"
+                description: "refresh_views"
             )
             await #expect(throws: expectedError) {
                 try await migrator.apply()
@@ -422,7 +439,7 @@ import Foundation
                     SchemaHistoryRow(
                         rank: 1,
                         version: nil,
-                        description: "migrations/v1.create_users.apply.sql",
+                        description: "create_users",
                         type: .apply,
                         checksum: checksum(sqlScript: SQLScriptStub.createUsersTable),
                         user: "mock_user",
@@ -437,7 +454,7 @@ import Foundation
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.missingVersion(
                 type: .apply,
-                description: "migrations/v1.create_users.apply.sql"
+                description: "create_users"
             )
             await #expect(throws: expectedError) {
                 try await migrator.apply()
@@ -455,7 +472,7 @@ import Foundation
                     SchemaHistoryRow(
                         rank: 1,
                         version: nil,
-                        description: "migrations/v1.create_users.undo.sql",
+                        description: "create_users",
                         type: .undo,
                         checksum: checksum(sqlScript: SQLScriptStub.dropUsersTable),
                         user: "mock_user",
@@ -470,7 +487,7 @@ import Foundation
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.missingVersion(
                 type: .undo,
-                description: "migrations/v1.create_users.undo.sql"
+                description: "create_users"
             )
             await #expect(throws: expectedError) {
                 try await migrator.apply()
@@ -531,7 +548,6 @@ extension SchemaHistoryRow {
     fileprivate init(
         id: MigrationID,
         rank: Int = 1,
-        description: String,
         checksum: String,
         user: String = "mock_user",
         executionDate: Date = .stub,
@@ -554,7 +570,7 @@ extension SchemaHistoryRow {
         self.init(
             rank: rank,
             version: version,
-            description: description,
+            description: id.description,
             type: type,
             checksum: checksum,
             user: user,
@@ -577,21 +593,23 @@ private enum SQLScriptStub {
 extension ResolvedMigration {
     fileprivate enum Apply {
         static func createUsersTable(
-            script: String = SQLScriptStub.createUsersTable
+            script: String = SQLScriptStub.createUsersTable,
+            path: String = "migrations/v1.create_users.apply.sql"
         ) -> ResolvedMigration {
             ResolvedMigration(
                 id: .apply(version: 1, description: "create_users"),
-                description: "migrations/v1.create_users.apply.sql",
+                script: path,
                 sqlScript: { script }
             )
         }
 
         static func addEmailToUsersTable(
-            script: String = SQLScriptStub.addEmailToUsersTable
+            script: String = SQLScriptStub.addEmailToUsersTable,
+            path: String = "migrations/v2.add_email.apply.sql"
         ) -> ResolvedMigration {
             ResolvedMigration(
                 id: .apply(version: 2, description: "add_email"),
-                description: "migrations/v2.add_email.apply.sql",
+                script: path,
                 sqlScript: { script }
             )
         }
@@ -599,11 +617,12 @@ extension ResolvedMigration {
 
     fileprivate enum Undo {
         static func dropUsersTable(
-            script: String = SQLScriptStub.dropUsersTable
+            script: String = SQLScriptStub.dropUsersTable,
+            path: String = "migrations/v1.create_users.undo.sql"
         ) -> ResolvedMigration {
             ResolvedMigration(
                 id: .undo(version: 1, description: "create_users"),
-                description: "migrations/v1.create_users.undo.sql",
+                script: path,
                 sqlScript: { script }
             )
         }
@@ -611,11 +630,12 @@ extension ResolvedMigration {
 
     fileprivate enum Repeatable {
         static func refreshViews(
-            script: String = SQLScriptStub.createOrReplaceActiveUsersView
+            script: String = SQLScriptStub.createOrReplaceActiveUsersView,
+            path: String = "migrations/repeat.refresh_views.sql"
         ) -> ResolvedMigration {
             ResolvedMigration(
                 id: .repeatable(description: "refresh_views"),
-                description: "migrations/repeat.refresh_views.sql",
+                script: path,
                 sqlScript: { script }
             )
         }
@@ -633,7 +653,6 @@ extension SchemaHistoryRow {
             SchemaHistoryRow(
                 id: .apply(version: 1, description: "create_users"),
                 rank: rank,
-                description: "migrations/v1.create_users.apply.sql",
                 checksum: Crane.checksum(sqlScript: SQLScriptStub.createUsersTable),
                 user: user,
                 executionDate: executionDate,
@@ -650,7 +669,6 @@ extension SchemaHistoryRow {
             SchemaHistoryRow(
                 id: .apply(version: 2, description: "add_email"),
                 rank: rank,
-                description: "migrations/v2.add_email.apply.sql",
                 checksum: Crane.checksum(sqlScript: SQLScriptStub.addEmailToUsersTable),
                 user: user,
                 executionDate: executionDate,
@@ -669,7 +687,6 @@ extension SchemaHistoryRow {
             SchemaHistoryRow(
                 id: .undo(version: 1, description: "create_users"),
                 rank: rank,
-                description: "migrations/v1.create_users.undo.sql",
                 checksum: Crane.checksum(sqlScript: SQLScriptStub.dropUsersTable),
                 user: user,
                 executionDate: executionDate,
@@ -688,7 +705,6 @@ extension SchemaHistoryRow {
             SchemaHistoryRow(
                 id: .repeatable(description: "refresh_views"),
                 rank: rank,
-                description: "migrations/repeat.refresh_views.sql",
                 checksum: Crane.checksum(sqlScript: SQLScriptStub.createOrReplaceActiveUsersView),
                 user: user,
                 executionDate: executionDate,

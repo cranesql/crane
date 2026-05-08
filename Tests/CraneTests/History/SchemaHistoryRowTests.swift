@@ -24,7 +24,7 @@ import Testing
         let expectedRow = SchemaHistoryRow(
             rank: 1,
             version: 42,
-            description: "migrations/v42.create_users.apply.sql",
+            description: "create_users",
             type: .apply,
             checksum: checksum,
             user: "slashmo",
@@ -36,7 +36,6 @@ import Testing
         let row = SchemaHistoryRow(
             id: id,
             rank: 1,
-            description: "migrations/v42.create_users.apply.sql",
             checksum: checksum,
             user: "slashmo",
             executionDate: executionDate,
@@ -55,7 +54,7 @@ import Testing
         let expectedRow = SchemaHistoryRow(
             rank: 2,
             version: 42,
-            description: "migrations/v42.create_users.undo.sql",
+            description: "create_users",
             type: .undo,
             checksum: checksum,
             user: "slashmo",
@@ -67,7 +66,6 @@ import Testing
         let row = SchemaHistoryRow(
             id: id,
             rank: 2,
-            description: "migrations/v42.create_users.undo.sql",
             checksum: checksum,
             user: "slashmo",
             executionDate: executionDate,
@@ -88,7 +86,7 @@ import Testing
         let expectedRow = SchemaHistoryRow(
             rank: 3,
             version: nil,
-            description: "migrations/repeat.refresh_views.sql",
+            description: "refresh_views",
             type: .repeatable,
             checksum: checksum,
             user: "slashmo",
@@ -100,7 +98,6 @@ import Testing
         let row = SchemaHistoryRow(
             id: id,
             rank: 3,
-            description: "migrations/repeat.refresh_views.sql",
             checksum: checksum,
             user: "slashmo",
             executionDate: executionDate,
