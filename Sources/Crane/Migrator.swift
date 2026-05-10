@@ -11,6 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Logging
+
 #if canImport(FoundationEssentials)
 public import FoundationEssentials
 #else
@@ -20,6 +22,7 @@ public import Foundation
 public struct Migrator<Target: MigrationTarget>: Sendable {
     private let resolver: any MigrationResolver
     private let target: Target
+    private let logger: Logger
     private let measure: @Sendable (_ work: @Sendable () async throws -> Void) async throws -> Duration
     private let now: @Sendable () -> Date
 
@@ -42,6 +45,7 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
     ) {
         self.resolver = resolver
         self.target = target
+        self.logger = Logger(label: "crane")
         self.measure = measure
         self.now = now
     }
@@ -53,6 +57,7 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
         let state = try await validatedMigrationState(resolved: resolvedMigrations, history: history)
         let user = try await target.currentUser()
         var nextRank = history.count + 1
+        var appliedCount = 0
 
         for migration in resolvedMigrations {
             switch migration.id {
@@ -67,6 +72,7 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
                         user: user
                     )
                     nextRank += 1
+                    appliedCount += 1
                 }
             case .undo:
                 continue
@@ -87,8 +93,15 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
                         user: user
                     )
                     nextRank += 1
+                    appliedCount += 1
                 }
             }
+        }
+
+        if appliedCount == 0 {
+            logger.info("No pending migrations.")
+        } else {
+            logger.info("Applied pending migrations.", metadata: ["count": "\(appliedCount)"])
         }
     }
 
@@ -113,6 +126,15 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
                 succeeded: true
             )
             try await target.record(row)
+
+            var metadata: Logger.Metadata = [
+                "type": "\(row.type.rawValue)",
+                "description": "\(row.description)",
+            ]
+            if let version = row.version {
+                metadata["version"] = "\(version)"
+            }
+            logger.info("Applied migration.", metadata: metadata)
         }
     }
 
@@ -154,11 +176,26 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
             switch row.type {
             case .apply, .undo:
                 guard let version = row.version else {
+                    logger.error(
+                        "Schema history row is missing a version.",
+                        metadata: [
+                            "type": "\(row.type.rawValue)",
+                            "description": "\(row.description)",
+                        ]
+                    )
                     throw ValidationError.missingVersion(type: row.type, description: row.description)
                 }
 
                 let key = VersionedHistoryKey(version: version, type: row.type)
                 guard let resolvedMigration = resolvedByVersionAndType[key] else {
+                    logger.error(
+                        "Applied migration is no longer resolved.",
+                        metadata: [
+                            "type": "\(row.type.rawValue)",
+                            "version": "\(version)",
+                            "description": "\(row.description)",
+                        ]
+                    )
                     throw ValidationError.missingMigration(
                         version: version,
                         type: row.type,
@@ -170,6 +207,10 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
                 let currentChecksum = checksum(sqlScript: sqlScript)
 
                 if currentChecksum != row.checksum {
+                    logger.error(
+                        "Migration file has been modified after being applied.",
+                        metadata: ["script": "\(resolvedMigration.script)"]
+                    )
                     throw ValidationError.checksumMismatch(
                         id: resolvedMigration.id,
                         script: resolvedMigration.script,
@@ -182,6 +223,13 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
 
             case .repeatable:
                 if let version = row.version {
+                    logger.error(
+                        "Repeatable schema history row has a version.",
+                        metadata: [
+                            "version": "\(version)",
+                            "description": "\(row.description)",
+                        ]
+                    )
                     throw ValidationError.repeatableMigrationWithVersion(
                         version: version,
                         description: row.description
