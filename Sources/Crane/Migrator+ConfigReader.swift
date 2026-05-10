@@ -15,10 +15,11 @@
 public import Configuration
 
 extension Migrator {
+    /// Creates a new migrator from a configuration reader.
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, *)
     public init(reader: ConfigReader, target: Target) throws {
         try self.init(
-            resolver: FileSystemMigrationResolver(reader: reader.scoped(to: "crane")),
+            resolver: FileSystemMigrationResolver(reader: reader),
             target: target
         )
     }
