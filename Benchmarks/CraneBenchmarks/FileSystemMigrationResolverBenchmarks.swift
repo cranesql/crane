@@ -21,12 +21,30 @@ func fileSystemMigrationResolverBenchmarks() {
     makeFileSystemMigrationResolverReadSQLScriptBenchmark()
 }
 
+// Time-based metrics on shared CI runners are subject to single-bucket noise (e.g. one percentile
+// flipping from 10μs to 20μs) that produces false-positive regression alerts. Suppress threshold
+// checks on those metrics — they remain measured and visible in the report. Memory and allocation
+// counts are deterministic, so keep the default 5% tolerance there.
+private func craneThresholds() -> [BenchmarkMetric: BenchmarkThresholds] {
+    [
+        .cpuTotal: BenchmarkThresholds(relative: BenchmarkThresholds.Relative.none),
+        .wallClock: BenchmarkThresholds(relative: BenchmarkThresholds.Relative.none),
+        .throughput: BenchmarkThresholds(relative: BenchmarkThresholds.Relative.none),
+        .mallocCountTotal: BenchmarkThresholds(relative: BenchmarkThresholds.Relative.default),
+        .peakMemoryResident: BenchmarkThresholds(relative: BenchmarkThresholds.Relative.default),
+        .instructions: BenchmarkThresholds(relative: BenchmarkThresholds.Relative.default),
+    ]
+}
+
 @discardableResult
 private func makeFileSystemMigrationResolverResolveBenchmark() -> Benchmark? {
     let baseURL = URL.temporaryDirectory.appending(path: UUID().uuidString)
     let migrationsURL = baseURL.appending(path: "migrations")
 
-    return Benchmark("FileSystemMigrationResolver: Resolve") { benchmark in
+    return Benchmark(
+        "FileSystemMigrationResolver: Resolve",
+        configuration: .init(thresholds: craneThresholds())
+    ) { benchmark in
         for _ in benchmark.scaledIterations {
             let resolver = try FileSystemMigrationResolver(
                 paths: ["migrations"],
@@ -52,7 +70,10 @@ private func makeFileSystemMigrationResolverResolveRecursivelyBenchmark() -> Ben
     let baseURL = URL.temporaryDirectory.appending(path: UUID().uuidString)
     let migrationsURL = baseURL.appending(path: "migrations")
 
-    return Benchmark("FileSystemMigrationResolver: Resolve recursively") { benchmark in
+    return Benchmark(
+        "FileSystemMigrationResolver: Resolve recursively",
+        configuration: .init(thresholds: craneThresholds())
+    ) { benchmark in
         for _ in benchmark.scaledIterations {
             let resolver = try FileSystemMigrationResolver(
                 paths: ["migrations"],
@@ -87,7 +108,7 @@ private func makeFileSystemMigrationResolverReadSQLScriptBenchmark() -> Benchmar
 
     return Benchmark(
         "FileSystemMigrationResolver: Read SQL Script",
-        configuration: .init(scalingFactor: .kilo)
+        configuration: .init(scalingFactor: .kilo, thresholds: craneThresholds())
     ) { benchmark in
         let resolver = try FileSystemMigrationResolver(
             paths: ["migrations"],
