@@ -511,8 +511,8 @@ import Foundation
 
                 let reader = ConfigReader(
                     provider: InMemoryProvider(values: [
-                        "crane.rootPath": ConfigValue(.string(rootURL.path), isSecret: false),
-                        "crane.paths": ConfigValue(.stringArray(["sql"]), isSecret: false),
+                        "rootPath": ConfigValue(.string(rootURL.path), isSecret: false),
+                        "paths": ConfigValue(.stringArray(["sql"]), isSecret: false),
                     ])
                 )
                 let target = MockTarget()
