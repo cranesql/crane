@@ -71,15 +71,8 @@ struct `File-System Migration Resolver` {
         }
     }
 
-    @Test func `Ignores migration files from nested paths if not configured`() async throws {
-        try await withTemporaryDirectories("migrations") { rootURL, urls in
-            let nestedFolderURL = rootURL.appendingPathComponent("migrations/repeatable")
-            try FileManager.default.createDirectory(at: nestedFolderURL, withIntermediateDirectories: false)
-            try "SELECT VERSION();".write(
-                to: nestedFolderURL.appendingPathComponent("repeat.version.sql"),
-                atomically: true,
-                encoding: .utf8
-            )
+    @Test func `Resolves migration files recursively from nested directories`() async throws {
+        try await withTemporaryDirectories("migrations", "migrations/nested") { rootURL, urls in
             try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
                 to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
                 atomically: true,
@@ -87,6 +80,11 @@ struct `File-System Migration Resolver` {
             )
             try "DROP TABLE users;".write(
                 to: urls[0].appendingPathComponent("v1.create_users.undo.sql"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try "SELECT VERSION();".write(
+                to: urls[1].appendingPathComponent("repeat.version.sql"),
                 atomically: true,
                 encoding: .utf8
             )
@@ -107,20 +105,20 @@ struct `File-System Migration Resolver` {
                         script: "migrations/v1.create_users.undo.sql",
                         sqlScript: "DROP TABLE users;"
                     ),
+                    EquatableResolvedMigration(
+                        id: .repeatable(description: "version"),
+                        script: "migrations/nested/repeat.version.sql",
+                        sqlScript: "SELECT VERSION();"
+                    ),
                 ]
             )
         }
     }
 
-    @Test func `Resolves migration files from nested paths if configured`() async throws {
-        try await withTemporaryDirectories("migrations", "migrations/repeatable") { rootURL, urls in
+    @Test func `Composes migrations from multiple independent roots`() async throws {
+        try await withTemporaryDirectories("a", "b") { rootURL, urls in
             try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
                 to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
-                atomically: true,
-                encoding: .utf8
-            )
-            try "DROP TABLE users;".write(
-                to: urls[0].appendingPathComponent("v1.create_users.undo.sql"),
                 atomically: true,
                 encoding: .utf8
             )
@@ -130,10 +128,7 @@ struct `File-System Migration Resolver` {
                 encoding: .utf8
             )
 
-            let resolver = try FileSystemMigrationResolver(
-                paths: ["migrations", "migrations/repeatable"],
-                rootPath: rootURL.path
-            )
+            let resolver = try FileSystemMigrationResolver(paths: ["a", "b"], rootPath: rootURL.path)
 
             let migrations = try await resolver.migrations()
 
@@ -141,17 +136,12 @@ struct `File-System Migration Resolver` {
                 try await migrations.equatable == [
                     EquatableResolvedMigration(
                         id: .apply(version: 1, description: "create_users"),
-                        script: "migrations/v1.create_users.apply.sql",
+                        script: "a/v1.create_users.apply.sql",
                         sqlScript: "CREATE TABLE users (id UUID PRIMARY KEY);"
                     ),
                     EquatableResolvedMigration(
-                        id: .undo(version: 1, description: "create_users"),
-                        script: "migrations/v1.create_users.undo.sql",
-                        sqlScript: "DROP TABLE users;"
-                    ),
-                    EquatableResolvedMigration(
                         id: .repeatable(description: "version"),
-                        script: "migrations/repeatable/repeat.version.sql",
+                        script: "b/repeat.version.sql",
                         sqlScript: "SELECT VERSION();"
                     ),
                 ]
@@ -162,6 +152,111 @@ struct `File-System Migration Resolver` {
     @Test func `Fails to initialize without paths`() async throws {
         #expect(throws: (any Error).self) {
             try FileSystemMigrationResolver(paths: [])
+        }
+    }
+
+    @Test func `Throws when a configured path does not exist`() async throws {
+        try await withTemporaryDirectories("a") { rootURL, _ in
+            let resolver = try FileSystemMigrationResolver(paths: ["b"], rootPath: rootURL.path)
+            let expectedPath = rootURL.appendingPathComponent("b").path
+
+            await #expect(throws: FileSystemMigrationResolverError.unreadablePath(expectedPath)) {
+                _ = try await resolver.migrations()
+            }
+        }
+    }
+
+    @Test func `Skips hidden directories`() async throws {
+        // Without this, Foundation's enumerator descends into the hidden timestamped sibling Kubernetes
+        // maintains for ConfigMap mounts, surfacing each SQL file twice.
+        try await withTemporaryDirectories("migrations", "migrations/..hidden") { rootURL, urls in
+            try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
+                to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try "SELECT VERSION();".write(
+                to: urls[1].appendingPathComponent("repeat.version.sql"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let resolver = try FileSystemMigrationResolver(paths: ["migrations"], rootPath: rootURL.path)
+
+            let migrations = try await resolver.migrations()
+
+            #expect(
+                try await migrations.equatable == [
+                    EquatableResolvedMigration(
+                        id: .apply(version: 1, description: "create_users"),
+                        script: "migrations/v1.create_users.apply.sql",
+                        sqlScript: "CREATE TABLE users (id UUID PRIMARY KEY);"
+                    )
+                ]
+            )
+        }
+    }
+
+    @Test func `Skips non-SQL files`() async throws {
+        try await withTemporaryDirectories("migrations") { rootURL, urls in
+            try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
+                to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try "# Migrations".write(
+                to: urls[0].appendingPathComponent("README.md"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try "binary".write(
+                to: urls[0].appendingPathComponent(".DS_Store"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let resolver = try FileSystemMigrationResolver(paths: ["migrations"], rootPath: rootURL.path)
+
+            let migrations = try await resolver.migrations()
+
+            #expect(
+                try await migrations.equatable == [
+                    EquatableResolvedMigration(
+                        id: .apply(version: 1, description: "create_users"),
+                        script: "migrations/v1.create_users.apply.sql",
+                        sqlScript: "CREATE TABLE users (id UUID PRIMARY KEY);"
+                    )
+                ]
+            )
+        }
+    }
+
+    @Test func `Throws when the same migration ID is resolved from multiple paths`() async throws {
+        try await withTemporaryDirectories("a", "b") { rootURL, urls in
+            try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
+                to: urls[0].appendingPathComponent("v1.create_users.apply.sql"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try "CREATE TABLE users (id UUID PRIMARY KEY);".write(
+                to: urls[1].appendingPathComponent("v1.create_users.apply.sql"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let resolver = try FileSystemMigrationResolver(paths: ["a", "b"], rootPath: rootURL.path)
+
+            await #expect(
+                throws: FileSystemMigrationResolverError.duplicateMigrationID(
+                    .apply(version: 1, description: "create_users"),
+                    scripts: [
+                        "a/v1.create_users.apply.sql",
+                        "b/v1.create_users.apply.sql",
+                    ]
+                )
+            ) {
+                _ = try await resolver.migrations()
+            }
         }
     }
 
