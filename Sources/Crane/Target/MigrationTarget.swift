@@ -21,7 +21,10 @@ public protocol MigrationTarget: Sendable {
     /// Retrieve the username of the current database connection.
     ///
     /// Used to populate the `user` field of ``SchemaHistoryRow`` when recording migrations.
-    func currentUser() async throws -> String
+    ///
+    /// - Note: Return `nil` in case your target doesn't have the concept of users (e.g. SQLite).
+    ///   Don't return `nil` on failures, throw instead.
+    func currentUser() async throws -> String?
 
     /// Retrieve the complete migration history from the target system.
     ///

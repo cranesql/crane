@@ -250,6 +250,32 @@ import Foundation
                 )
             }
 
+            @Test func `Records nil user when target returns no current user`() async throws {
+                let resolver = MockResolver(
+                    migrations: [
+                        ResolvedMigration.Apply.createUsersTable()
+                    ]
+                )
+                let target = MockTarget(currentUser: nil)
+
+                let migrator = Crane.Migrator(
+                    resolver: resolver,
+                    target: target,
+                    measure: {
+                        try await $0()
+                        return .milliseconds(42)
+                    },
+                    now: { .stub }
+                )
+                try await migrator.apply()
+
+                #expect(
+                    await target.recordedRows == [
+                        SchemaHistoryRow.Apply.createUsersTable(user: nil)
+                    ]
+                )
+            }
+
             @Test func `Records executed repeatable migration`() async throws {
                 let resolver = MockResolver(
                     migrations: [
@@ -549,7 +575,7 @@ extension SchemaHistoryRow {
         id: MigrationID,
         rank: Int = 1,
         checksum: String,
-        user: String = "mock_user",
+        user: String? = "mock_user",
         executionDate: Date = .stub,
         duration: Duration = .milliseconds(42),
         succeeded: Bool = true
@@ -646,7 +672,7 @@ extension SchemaHistoryRow {
     fileprivate enum Apply {
         static func createUsersTable(
             rank: Int = 1,
-            user: String = "mock_user",
+            user: String? = "mock_user",
             executionDate: Date = .stub,
             duration: Duration = .milliseconds(42)
         ) -> SchemaHistoryRow {
