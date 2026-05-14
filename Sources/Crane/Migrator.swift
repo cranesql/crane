@@ -109,7 +109,7 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
         id: MigrationID,
         sqlScript: String,
         rank: Int,
-        user: String
+        user: String?
     ) async throws {
         let scriptChecksum = checksum(sqlScript: sqlScript)
         try await target.withTransaction {

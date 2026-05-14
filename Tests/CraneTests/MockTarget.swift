@@ -19,16 +19,18 @@ actor MockTarget: MigrationTarget {
     private(set) var transactionCount = 0
     private(set) var setUpHistoryCallCount = 0
     private let historyResult: Result<[SchemaHistoryRow], any Error>
+    private let stubbedCurrentUser: String?
 
-    init(history: [SchemaHistoryRow] = []) {
+    init(history: [SchemaHistoryRow] = [], currentUser: String? = "mock_user") {
         self.historyResult = .success(history)
+        self.stubbedCurrentUser = currentUser
     }
 
     func setUpHistory() async throws {
         setUpHistoryCallCount += 1
     }
 
-    func currentUser() async throws -> String { "mock_user" }
+    func currentUser() async throws -> String? { stubbedCurrentUser }
 
     func history() async throws -> [SchemaHistoryRow] {
         try historyResult.get()

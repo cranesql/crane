@@ -36,7 +36,9 @@ public struct SchemaHistoryRow: Hashable, Sendable {
     public let checksum: String
 
     /// Database user who executed the migration.
-    public let user: String
+    ///
+    /// Set to `nil` in case the migration target doesn't have the concept of users (e.g. SQLite).
+    public let user: String?
 
     /// Timestamp when the migration was applied.
     public let executionDate: Date
@@ -56,6 +58,7 @@ public struct SchemaHistoryRow: Hashable, Sendable {
     ///   - type: Type of migration operation.
     ///   - checksum: Checksum for detecting changes to the migration script.
     ///   - user: Database user who executed the migration.
+    ///     Set this to `nil` in case your migration target doesn't have the concept of users (e.g. SQLite).
     ///   - executionDate: Timestamp when the migration was applied.
     ///   - duration: Execution duration of the migration.
     ///   - succeeded: Whether the migration executed successfully.
@@ -65,7 +68,7 @@ public struct SchemaHistoryRow: Hashable, Sendable {
         description: String,
         type: MigrationType,
         checksum: String,
-        user: String,
+        user: String?,
         executionDate: Date,
         duration: Duration,
         succeeded: Bool
@@ -85,7 +88,7 @@ public struct SchemaHistoryRow: Hashable, Sendable {
         id: MigrationID,
         rank: Int,
         checksum: String,
-        user: String,
+        user: String?,
         executionDate: Date,
         duration: Duration,
         succeeded: Bool
