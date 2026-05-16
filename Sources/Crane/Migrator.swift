@@ -51,57 +51,59 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
     }
 
     public func apply() async throws {
-        try await target.setUpHistory()
-        let resolvedMigrations = try await resolver.migrations()
-        let history = try await target.history()
-        let state = try await validatedMigrationState(resolved: resolvedMigrations, history: history)
-        let user = try await target.currentUser()
-        var nextRank = history.count + 1
-        var appliedCount = 0
+        try await target.withLock {
+            try await target.setUpHistory()
+            let resolvedMigrations = try await resolver.migrations()
+            let history = try await target.history()
+            let state = try await validatedMigrationState(resolved: resolvedMigrations, history: history)
+            let user = try await target.currentUser()
+            var nextRank = history.count + 1
+            var appliedCount = 0
 
-        for migration in resolvedMigrations {
-            switch migration.id {
-            case .apply(let version, _):
-                let key = VersionedHistoryKey(version: version, type: .apply)
-                if !state.appliedVersionedKeys.contains(key) {
+            for migration in resolvedMigrations {
+                switch migration.id {
+                case .apply(let version, _):
+                    let key = VersionedHistoryKey(version: version, type: .apply)
+                    if !state.appliedVersionedKeys.contains(key) {
+                        let sqlScript = try await migration.sqlScript
+                        try await executeMigration(
+                            id: migration.id,
+                            sqlScript: sqlScript,
+                            rank: nextRank,
+                            user: user
+                        )
+                        nextRank += 1
+                        appliedCount += 1
+                    }
+                case .undo:
+                    continue
+                case .repeatable(let description):
                     let sqlScript = try await migration.sqlScript
-                    try await executeMigration(
-                        id: migration.id,
-                        sqlScript: sqlScript,
-                        rank: nextRank,
-                        user: user
-                    )
-                    nextRank += 1
-                    appliedCount += 1
-                }
-            case .undo:
-                continue
-            case .repeatable(let description):
-                let sqlScript = try await migration.sqlScript
-                let scriptChecksum = checksum(sqlScript: sqlScript)
-                let shouldExecute: Bool
-                if let lastChecksum = state.lastRepeatableChecksums[description] {
-                    shouldExecute = scriptChecksum != lastChecksum
-                } else {
-                    shouldExecute = true
-                }
-                if shouldExecute {
-                    try await executeMigration(
-                        id: migration.id,
-                        sqlScript: sqlScript,
-                        rank: nextRank,
-                        user: user
-                    )
-                    nextRank += 1
-                    appliedCount += 1
+                    let scriptChecksum = checksum(sqlScript: sqlScript)
+                    let shouldExecute: Bool
+                    if let lastChecksum = state.lastRepeatableChecksums[description] {
+                        shouldExecute = scriptChecksum != lastChecksum
+                    } else {
+                        shouldExecute = true
+                    }
+                    if shouldExecute {
+                        try await executeMigration(
+                            id: migration.id,
+                            sqlScript: sqlScript,
+                            rank: nextRank,
+                            user: user
+                        )
+                        nextRank += 1
+                        appliedCount += 1
+                    }
                 }
             }
-        }
 
-        if appliedCount == 0 {
-            logger.info("No pending migrations.")
-        } else {
-            logger.info("Applied pending migrations.", metadata: ["count": "\(appliedCount)"])
+            if appliedCount == 0 {
+                logger.info("No pending migrations.")
+            } else {
+                logger.info("Applied pending migrations.", metadata: ["count": "\(appliedCount)"])
+            }
         }
     }
 

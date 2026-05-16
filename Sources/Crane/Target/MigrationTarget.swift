@@ -50,10 +50,23 @@ public protocol MigrationTarget: Sendable {
     /// Execute the given closure within a transaction.
     ///
     /// If the closure throws, the transaction is rolled back.
-    /// Targets where the database does not support transactional DDL may execute
-    /// statements outside of a real transaction, making this best-effort.
+    ///
+    /// - Important: Targets where the database does not support transactional DDL may execute
+    ///   statements outside of a real transaction, making this best-effort.
     ///
     /// - Parameter body: The work to perform within the transaction.
     /// - Throws: An error if the transaction fails or the body throws.
     func withTransaction(_ body: @Sendable () async throws -> Void) async throws
+
+    /// Execute the given closure while holding an exclusive cross-process lock on the target.
+    ///
+    /// Used to serialize concurrent ``Migrator/apply()`` runs from multiple processes
+    /// (e.g. multiple application replicas starting in parallel).
+    ///
+    /// - Important: Targets where the database does not support cross-process locks may execute
+    ///   the body without one, making this best-effort.
+    ///
+    /// - Parameter body: The work to perform while holding the lock.
+    /// - Throws: An error if the lock cannot be acquired or the body throws.
+    func withLock(_ body: @Sendable () async throws -> Void) async throws
 }
