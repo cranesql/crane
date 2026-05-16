@@ -48,6 +48,32 @@ import Foundation
     }
 
     @Suite struct Apply {
+        @Test func `Performs all operations within the target lock`() async throws {
+            let resolver = MockResolver(
+                migrations: [
+                    ResolvedMigration(
+                        id: .apply(version: 1, description: "create_users"),
+                        script: "v1.create_users.apply.sql",
+                        sqlScript: { SQLScriptStub.createUsersTable }
+                    )
+                ]
+            )
+            let target = MockTarget()
+            #expect(await target.lockCount == 0)
+
+            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            try await migrator.apply()
+
+            #expect(await target.executedSQLScripts == [SQLScriptStub.createUsersTable])
+            #expect(await target.lockCount == 1)
+            #expect(await target.activeLockCountWhileSettingUpHistory == 1)
+            #expect(await target.activeLockCountWhileReadingHistory == 1)
+            #expect(await target.activeLockCountWhileReadingCurrentUser == 1)
+            #expect(await target.activeLockCountWhileOpeningTransaction == 1)
+            #expect(await target.activeLockCountWhileExecutingScript == 1)
+            #expect(await target.activeLockCountWhileRecordingRow == 1)
+        }
+
         @Test func `Sets up history before executing migrations`() async throws {
             let resolver = MockResolver(migrations: [])
             let target = MockTarget()
