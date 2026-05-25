@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Logging
+package import Logging
 
 #if canImport(FoundationEssentials)
 public import FoundationEssentials
@@ -38,6 +38,7 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
     package init(
         resolver: some MigrationResolver,
         target: Target,
+        logger: Logger = Logger(label: "Crane"),
         measure: @escaping @Sendable (_ work: @Sendable () async throws -> Void) async throws -> Duration = {
             try await ContinuousClock().measure($0)
         },
@@ -45,65 +46,72 @@ public struct Migrator<Target: MigrationTarget>: Sendable {
     ) {
         self.resolver = resolver
         self.target = target
-        self.logger = Logger(label: "crane")
+        self.logger = logger
         self.measure = measure
         self.now = now
     }
 
     public func apply() async throws {
-        try await target.withLock {
-            try await target.setUpHistory()
-            let resolvedMigrations = try await resolver.migrations()
-            let history = try await target.history()
-            let state = try await validatedMigrationState(resolved: resolvedMigrations, history: history)
-            let user = try await target.currentUser()
-            var nextRank = history.count + 1
-            var appliedCount = 0
+        do {
+            try await target.withLock {
+                try await target.setUpHistory()
+                let resolvedMigrations = try await resolver.migrations()
+                let history = try await target.history()
+                let state = try await validatedMigrationState(resolved: resolvedMigrations, history: history)
+                let user = try await target.currentUser()
+                var nextRank = history.count + 1
+                var appliedCount = 0
 
-            for migration in resolvedMigrations {
-                switch migration.id {
-                case .apply(let version, _):
-                    let key = VersionedHistoryKey(version: version, type: .apply)
-                    if !state.appliedVersionedKeys.contains(key) {
+                for migration in resolvedMigrations {
+                    switch migration.id {
+                    case .apply(let version, _):
+                        let key = VersionedHistoryKey(version: version, type: .apply)
+                        if !state.appliedVersionedKeys.contains(key) {
+                            let sqlScript = try await migration.sqlScript
+                            try await executeMigration(
+                                id: migration.id,
+                                sqlScript: sqlScript,
+                                rank: nextRank,
+                                user: user
+                            )
+                            nextRank += 1
+                            appliedCount += 1
+                        }
+                    case .undo:
+                        continue
+                    case .repeatable(let description):
                         let sqlScript = try await migration.sqlScript
-                        try await executeMigration(
-                            id: migration.id,
-                            sqlScript: sqlScript,
-                            rank: nextRank,
-                            user: user
-                        )
-                        nextRank += 1
-                        appliedCount += 1
-                    }
-                case .undo:
-                    continue
-                case .repeatable(let description):
-                    let sqlScript = try await migration.sqlScript
-                    let scriptChecksum = checksum(sqlScript: sqlScript)
-                    let shouldExecute: Bool
-                    if let lastChecksum = state.lastRepeatableChecksums[description] {
-                        shouldExecute = scriptChecksum != lastChecksum
-                    } else {
-                        shouldExecute = true
-                    }
-                    if shouldExecute {
-                        try await executeMigration(
-                            id: migration.id,
-                            sqlScript: sqlScript,
-                            rank: nextRank,
-                            user: user
-                        )
-                        nextRank += 1
-                        appliedCount += 1
+                        let scriptChecksum = checksum(sqlScript: sqlScript)
+                        let shouldExecute: Bool
+                        if let lastChecksum = state.lastRepeatableChecksums[description] {
+                            shouldExecute = scriptChecksum != lastChecksum
+                        } else {
+                            shouldExecute = true
+                        }
+                        if shouldExecute {
+                            try await executeMigration(
+                                id: migration.id,
+                                sqlScript: sqlScript,
+                                rank: nextRank,
+                                user: user
+                            )
+                            nextRank += 1
+                            appliedCount += 1
+                        }
                     }
                 }
-            }
 
-            if appliedCount == 0 {
-                logger.info("No pending migrations.")
-            } else {
-                logger.info("Applied pending migrations.", metadata: ["count": "\(appliedCount)"])
+                if appliedCount == 0 {
+                    logger.info("No pending migrations.")
+                } else {
+                    logger.info("Applied pending migrations.", metadata: ["count": "\(appliedCount)"])
+                }
             }
+        } catch {
+            // Targets are expected to add their own structured logs when causing failures.
+            // This log is added on top to round off the reported failure and intentionally omits the `error` argument.
+            logger.error("Failed to apply pending migrations.")
+            throw error
         }
     }
 
