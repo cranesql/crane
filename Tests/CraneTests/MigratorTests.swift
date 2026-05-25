@@ -12,6 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 import Crane
+import InMemoryLogging
+import Logging
 import Testing
 
 #if Configuration
@@ -48,6 +50,16 @@ import Foundation
     }
 
     @Suite struct Apply {
+        let logHandler = InMemoryLogHandler()
+        let logger: Logger
+
+        init() {
+            var logger = Logger(label: "Crane")
+            logger.handler = logHandler
+            logger.logLevel = .trace
+            self.logger = logger
+        }
+
         @Test func `Performs all operations within the target lock`() async throws {
             let resolver = MockResolver(
                 migrations: [
@@ -84,6 +96,20 @@ import Foundation
             #expect(await target.setUpHistoryCallCount == 1)
         }
 
+        @Test func `Succeeds when no migrations are pending`() async throws {
+            let resolver = MockResolver(migrations: [])
+            let target = MockTarget()
+
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
+            try await migrator.apply()
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(level: .info, message: "No pending migrations.", metadata: [:])
+                ]
+            )
+        }
+
         @Test func `Validates checksums of previously executed versioned migrations`() async throws {
             let resolver = MockResolver(
                 migrations: [
@@ -115,7 +141,7 @@ import Foundation
             )
             let target = MockTarget(history: [SchemaHistoryRow.Apply.createUsersTable()])
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.checksumMismatch(
                 id: .apply(version: 1, description: "create_users"),
@@ -126,6 +152,21 @@ import Foundation
             await #expect(throws: expectedError) {
                 try await migrator.apply()
             }
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Migration file has been modified after being applied.",
+                        metadata: ["script": "migrations/v1.create_users.apply.sql"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Failed to apply pending migrations.",
+                        metadata: [:]
+                    ),
+                ]
+            )
         }
 
         @Test func `Throws validation error when undo migration checksum mismatches`() async throws {
@@ -140,7 +181,7 @@ import Foundation
             )
             let target = MockTarget(history: [SchemaHistoryRow.Undo.dropUsersTable()])
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.checksumMismatch(
                 id: .undo(version: 1, description: "create_users"),
@@ -151,6 +192,21 @@ import Foundation
             await #expect(throws: expectedError) {
                 try await migrator.apply()
             }
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Migration file has been modified after being applied.",
+                        metadata: ["script": "migrations/v1.create_users.undo.sql"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Failed to apply pending migrations.",
+                        metadata: [:]
+                    ),
+                ]
+            )
         }
 
         @Test func `Executes repeatable migration when checksum changed`() async throws {
@@ -163,11 +219,26 @@ import Foundation
             )
             let target = MockTarget(history: [SchemaHistoryRow.Repeatable.refreshViews()])
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             try await migrator.apply()
 
             #expect(await target.executedSQLScripts == [modifiedScript])
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .info,
+                        message: "Applied migration.",
+                        metadata: ["type": "REPEATABLE", "description": "refresh_views"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .info,
+                        message: "Applied pending migrations.",
+                        metadata: ["count": "1"]
+                    ),
+                ]
+            )
         }
 
         @Test func `Skips repeatable migration when checksum unchanged`() async throws {
@@ -178,11 +249,17 @@ import Foundation
             )
             let target = MockTarget(history: [SchemaHistoryRow.Repeatable.refreshViews()])
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             try await migrator.apply()
 
             #expect(await target.executedSQLScripts.isEmpty)
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(level: .info, message: "No pending migrations.", metadata: [:])
+                ]
+            )
         }
 
         @Test func `Skips moved repeatable migration when checksum unchanged`() async throws {
@@ -195,11 +272,17 @@ import Foundation
                 history: [SchemaHistoryRow.Repeatable.refreshViews()]
             )
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             try await migrator.apply()
 
             #expect(await target.executedSQLScripts.isEmpty)
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(level: .info, message: "No pending migrations.", metadata: [:])
+                ]
+            )
         }
 
         @Test func `Executes repeatable migration when never applied`() async throws {
@@ -210,11 +293,26 @@ import Foundation
             )
             let target = MockTarget()
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             try await migrator.apply()
 
             #expect(await target.executedSQLScripts == [SQLScriptStub.createOrReplaceActiveUsersView])
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .info,
+                        message: "Applied migration.",
+                        metadata: ["type": "REPEATABLE", "description": "refresh_views"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .info,
+                        message: "Applied pending migrations.",
+                        metadata: ["count": "1"]
+                    ),
+                ]
+            )
         }
 
         @Test func `Executes pending versioned migration`() async throws {
@@ -226,11 +324,26 @@ import Foundation
             )
             let target = MockTarget(history: [SchemaHistoryRow.Apply.createUsersTable()])
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             try await migrator.apply()
 
             #expect(await target.executedSQLScripts == [SQLScriptStub.addEmailToUsersTable])
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .info,
+                        message: "Applied migration.",
+                        metadata: ["type": "APPLY", "description": "add_email", "version": "2"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .info,
+                        message: "Applied pending migrations.",
+                        metadata: ["count": "1"]
+                    ),
+                ]
+            )
         }
 
         @Test func `Does not execute undo migrations`() async throws {
@@ -242,11 +355,26 @@ import Foundation
             )
             let target = MockTarget()
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             try await migrator.apply()
 
             #expect(await target.executedSQLScripts == [SQLScriptStub.createUsersTable])
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .info,
+                        message: "Applied migration.",
+                        metadata: ["type": "APPLY", "description": "create_users", "version": "1"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .info,
+                        message: "Applied pending migrations.",
+                        metadata: ["count": "1"]
+                    ),
+                ]
+            )
         }
 
         @Suite struct `History recording` {
@@ -419,7 +547,7 @@ import Foundation
             let resolver = MockResolver(migrations: [])
             let target = MockTarget(history: [SchemaHistoryRow.Apply.createUsersTable()])
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.missingMigration(
                 version: 1,
@@ -429,13 +557,28 @@ import Foundation
             await #expect(throws: expectedError) {
                 try await migrator.apply()
             }
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Applied migration is no longer resolved.",
+                        metadata: ["type": "APPLY", "description": "create_users", "version": "1"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Failed to apply pending migrations.",
+                        metadata: [:]
+                    ),
+                ]
+            )
         }
 
         @Test func `Throws validation error when undo migration is missing`() async throws {
             let resolver = MockResolver(migrations: [])
             let target = MockTarget(history: [SchemaHistoryRow.Undo.dropUsersTable()])
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.missingMigration(
                 version: 1,
@@ -445,6 +588,21 @@ import Foundation
             await #expect(throws: expectedError) {
                 try await migrator.apply()
             }
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Applied migration is no longer resolved.",
+                        metadata: ["type": "UNDO", "description": "create_users", "version": "1"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Failed to apply pending migrations.",
+                        metadata: [:]
+                    ),
+                ]
+            )
         }
 
         @Test func `Throws validation error when repeatable migration has version`() async throws {
@@ -469,7 +627,7 @@ import Foundation
                 ]
             )
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.repeatableMigrationWithVersion(
                 version: 42,
@@ -478,6 +636,21 @@ import Foundation
             await #expect(throws: expectedError) {
                 try await migrator.apply()
             }
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Repeatable schema history row has a version.",
+                        metadata: ["description": "refresh_views", "version": "42"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Failed to apply pending migrations.",
+                        metadata: [:]
+                    ),
+                ]
+            )
         }
 
         @Test func `Throws validation error when apply migration has no version`() async throws {
@@ -502,7 +675,7 @@ import Foundation
                 ]
             )
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.missingVersion(
                 type: .apply,
@@ -511,6 +684,21 @@ import Foundation
             await #expect(throws: expectedError) {
                 try await migrator.apply()
             }
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Schema history row is missing a version.",
+                        metadata: ["type": "APPLY", "description": "create_users"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Failed to apply pending migrations.",
+                        metadata: [:]
+                    ),
+                ]
+            )
         }
 
         @Test func `Throws validation error when undo migration has no version`() async throws {
@@ -535,7 +723,7 @@ import Foundation
                 ]
             )
 
-            let migrator = Crane.Migrator(resolver: resolver, target: target)
+            let migrator = Crane.Migrator(resolver: resolver, target: target, logger: logger)
 
             let expectedError = Crane.Migrator<MockTarget>.ValidationError.missingVersion(
                 type: .undo,
@@ -544,6 +732,21 @@ import Foundation
             await #expect(throws: expectedError) {
                 try await migrator.apply()
             }
+
+            #expect(
+                logHandler.entries == [
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Schema history row is missing a version.",
+                        metadata: ["type": "UNDO", "description": "create_users"]
+                    ),
+                    InMemoryLogHandler.Entry(
+                        level: .error,
+                        message: "Failed to apply pending migrations.",
+                        metadata: [:]
+                    ),
+                ]
+            )
         }
     }
 

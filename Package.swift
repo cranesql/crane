@@ -48,6 +48,7 @@ let package = Package(
                     package: "swift-configuration",
                     condition: .when(traits: ["Configuration"])
                 ),
+                .product(name: "InMemoryLogging", package: "swift-log"),
             ],
             swiftSettings: sharedSwiftSettings
         ),
