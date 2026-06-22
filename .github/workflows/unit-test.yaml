@@ -23,7 +23,7 @@ jobs:
       - name: Clang version
         run: clang --version
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Build / Test
         run: swift test --parallel --enable-all-traits --enable-code-coverage --xunit-output junit.xml
       - name: Merge code coverage
@@ -76,7 +76,7 @@ jobs:
       - name: Clang version
         run: clang --version
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Build / Test
         run: swift test --parallel --enable-all-traits --enable-code-coverage --xunit-output junit.xml
       - name: Merge code coverage
@@ -116,7 +116,7 @@ jobs:
         android_api_level: [28, 34]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Build and test on Android emulator
         uses: skiptools/swift-android-action@v2.9.5
         with:
