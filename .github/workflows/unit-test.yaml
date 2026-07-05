@@ -44,15 +44,16 @@ jobs:
           fi
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
+        uses: codecov/codecov-action@v7.0.0
         with:
+          report_type: test_results
           files: ./junit.xml,./junit-swift-testing.xml
           disable_search: true
           fail_ci_if_error: true
           flags: linux-${{ matrix.os_version }},swift-${{ matrix.swift_version }}
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload code coverage report to Codecov
-        uses: codecov/codecov-action@v6.0.1
+        uses: codecov/codecov-action@v7.0.0
         with:
           files: ./info.lcov
           disable_search: true
@@ -91,15 +92,16 @@ jobs:
           > info.lcov
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
+        uses: codecov/codecov-action@v7.0.0
         with:
+          report_type: test_results
           files: ./junit.xml,./junit-swift-testing.xml
           disable_search: true
           fail_ci_if_error: true
           flags: ${{ matrix.os_version }},swift-${{ steps.swift-version.outputs.version }}
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload code coverage report to Codecov
-        uses: codecov/codecov-action@v6.0.1
+        uses: codecov/codecov-action@v7.0.0
         with:
           files: ./info.lcov
           disable_search: true
